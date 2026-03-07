@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Luminalog - 智能的 VS Code 日志调试扩展，支持彩色输出、上下文感知、智能插入位置"
+    />
+    <meta name="keywords" content="vscode,console.log,debug,typescript,javascript,emoji,ast" />
+    <title>Luminalog - 智能日志调试扩展</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="icon" type="image/png" href="../media/icon.jpg" />
+  </head>
+  <body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+      <div class="container">
+        <div class="nav-brand">
+          <span class="logo">🚀</span>
+          <span class="brand-name">Luminalog</span>
+        </div>
+        <ul class="nav-menu">
+          <li><a href="#features">功能</a></li>
+          <li><a href="#demo">演示</a></li>
+          <li><a href="#docs">文档</a></li>
+          <li><a href="#install">安装</a></li>
+          <li><a href="https://github.com/lynn1286/luminalog" target="_blank">GitHub</a></li>
+        </ul>
+        <button class="mobile-menu-toggle" aria-label="Toggle menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Hero 区域 -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-content">
+          <h1 class="hero-title">
+            <span class="gradient-text">智能日志调试</span>
+            <br />让 Console.log 更强大
+          </h1>
+          <p class="hero-description">
+            基于 AST 的智能插入位置 · 彩色输出 · 上下文感知 · 支持 TypeScript/Vue/Svelte
+          </p>
+          <div class="hero-buttons">
+            <a href="#install" class="btn btn-primary"> <span>⚡</span> 立即安装 </a>
+            <a href="#demo" class="btn btn-secondary"> <span>🎯</span> 查看演示 </a>
+          </div>
+          <div class="hero-stats">
+            <div class="stat">
+              <span class="stat-value">17+</span>
+              <span class="stat-label">代码上下文</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">25+</span>
+              <span class="stat-label">测试用例</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">100%</span>
+              <span class="stat-label">测试通过</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-demo">
+          <div class="code-window">
+            <div class="window-header">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+              <span class="window-title">example.ts</span>
+            </div>
+            <div class="code-content">
+              <pre><code class="language-typescript"><span class="keyword">class</span> <span class="class-name">UserService</span> {
+  <span class="keyword">async</span> <span class="function">getUserInfo</span>(<span class="param">userId</span>: <span class="type">string</span>) {
+    <span class="keyword">const</span> <span class="variable">result</span> = <span class="keyword">await</span> <span class="function">fetchUser</span>(userId);
+    <span class="comment">// 选中 result，按 Cmd+Alt+L</span>
+    <span class="console">console.log(<span class="string">"%c 🚀 UserService -> getUserInfo -> result "</span>, <span class="string">"font-size:16px;background-color:#4ECDC4;color:black;"</span>, result);</span>
+    <span class="keyword">return</span> result;
+  }
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 功能特性 -->
+    <section id="features" class="features">
+      <div class="container">
+        <h2 class="section-title">核心特性</h2>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <h3>智能插入位置</h3>
+            <p>
+              基于 AST 分析，精确计算最佳插入位置。支持函数参数、return 语句、条件表达式等 17+
+              种代码上下文。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🎨</div>
+            <h3>彩色输出</h3>
+            <p>自动生成随机背景色，根据亮度智能选择文字颜色。支持自定义颜色列表和字体大小。</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">😊</div>
+            <h3>Emoji 前缀</h3>
+            <p>随机 emoji 前缀让日志更易识别。支持自定义 emoji 列表，快速定位不同的日志输出。</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🔍</div>
+            <h3>上下文感知</h3>
+            <p>自动包含类名、函数名等上下文信息。支持自定义分隔符和上下文显示开关。</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🧩</div>
+            <h3>智能扩展</h3>
+            <p>自动扩展属性访问链（code → res.code）。支持对象内部属性路径构建和可选链操作符。</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🛠️</div>
+            <h3>批量管理</h3>
+            <p>一键注释、取消注释、删除所有日志。支持多行日志语句和括号匹配检测。</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📝</div>
+            <h3>TypeScript 支持</h3>
+            <p>完整支持 TypeScript 语法。自动过滤类型声明、接口、枚举等无意义位置。</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>多框架支持</h3>
+            <p>支持 Vue、Svelte、Astro 单文件组件。自动提取 script 部分进行分析。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 交互式演示 -->
+    <section id="demo" class="demo">
+      <div class="container">
+        <h2 class="section-title">交互式演示</h2>
+        <p class="section-description">在下方编辑器中选中变量，点击"插入日志"按钮体验效果</p>
+
+        <div class="demo-container">
+          <div class="demo-editor">
+            <div class="editor-header">
+              <span class="editor-title">📝 代码编辑器</span>
+              <button id="insertLogBtn" class="btn btn-small">插入日志</button>
+            </div>
+            <textarea id="codeEditor" spellcheck="false">
+function getUserData(userId) {
+  const user = fetchUser(userId);
+  const profile = user.profile;
+  return profile;
+}</textarea
+            >
+          </div>
+          <div class="demo-output">
+            <div class="output-header">
+              <span class="output-title">🎨 输出预览</span>
+              <button id="clearOutputBtn" class="btn btn-small">清空</button>
+            </div>
+            <div id="outputConsole" class="console-output"></div>
+          </div>
+        </div>
+
+        <div class="demo-tips">
+          <h4>💡 使用提示</h4>
+          <ul>
+            <li>选中变量名（如 <code>user</code>、<code>profile</code>），点击"插入日志"</li>
+            <li>支持选中属性访问（如 <code>user.profile</code>）</li>
+            <li>尝试在不同位置插入日志，体验智能位置计算</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 文档 -->
+    <section id="docs" class="docs">
+      <div class="container">
+        <h2 class="section-title">快速开始</h2>
+
+        <div class="docs-grid">
+          <div class="doc-card">
+            <h3>⚙️ 配置选项</h3>
+            <div class="config-list">
+              <div class="config-item">
+                <code>insertContext</code>
+                <span>插入上下文信息（类名和函数名）</span>
+              </div>
+              <div class="config-item">
+                <code>makeLogColorful</code>
+                <span>启用彩色日志输出</span>
+              </div>
+              <div class="config-item">
+                <code>randomEmojiPrefix</code>
+                <span>添加随机 emoji 前缀</span>
+              </div>
+              <div class="config-item">
+                <code>logMessageFontSize</code>
+                <span>日志字体大小（默认 16px）</span>
+              </div>
+              <div class="config-item">
+                <code>customEmojis</code>
+                <span>自定义 emoji 列表</span>
+              </div>
+              <div class="config-item">
+                <code>customColors</code>
+                <span>自定义颜色列表</span>
+              </div>
+            </div>
+            <a href="docs/configuration.html" class="doc-link">查看完整配置 →</a>
+          </div>
+
+          <div class="doc-card">
+            <h3>⌨️ 快捷键</h3>
+            <div class="shortcut-list">
+              <div class="shortcut-item">
+                <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>L</kbd>
+                <span>插入日志</span>
+              </div>
+              <div class="shortcut-item">
+                <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd>
+                <span>注释所有日志</span>
+              </div>
+              <div class="shortcut-item">
+                <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>U</kbd>
+                <span>取消注释所有日志</span>
+              </div>
+              <div class="shortcut-item">
+                <kbd>Cmd</kbd> + <kbd>Alt</kbd> + <kbd>D</kbd> <kbd>L</kbd>
+                <span>删除所有日志</span>
+              </div>
+            </div>
+            <p class="shortcut-note">Windows/Linux 使用 <kbd>Ctrl</kbd> 替代 <kbd>Cmd</kbd></p>
+          </div>
+
+          <div class="doc-card">
+            <h3>📚 使用场景</h3>
+            <ul class="use-cases">
+              <li>✅ 函数参数调试</li>
+              <li>✅ 函数返回值追踪</li>
+              <li>✅ 对象属性查看</li>
+              <li>✅ 条件语句调试</li>
+              <li>✅ 异步函数调试</li>
+              <li>✅ 类方法调试</li>
+            </ul>
+            <a href="docs/usage.html" class="doc-link">查看使用指南 →</a>
+          </div>
+
+          <div class="doc-card">
+            <h3>🎯 支持的语言</h3>
+            <div class="language-tags">
+              <span class="tag">JavaScript</span>
+              <span class="tag">TypeScript</span>
+              <span class="tag">JSX</span>
+              <span class="tag">TSX</span>
+              <span class="tag">Vue</span>
+              <span class="tag">Svelte</span>
+              <span class="tag">Astro</span>
+            </div>
+            <p class="language-note">自动识别文件类型，提取 script 部分进行分析</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 安装 -->
+    <section id="install" class="install">
+      <div class="container">
+        <h2 class="section-title">安装 Luminalog</h2>
+
+        <div class="install-methods">
+          <div class="install-card">
+            <div class="install-icon">🛍️</div>
+            <h3>VS Code 市场</h3>
+            <p>在 VS Code 扩展市场搜索 "Luminalog"</p>
+            <div class="install-steps">
+              <ol>
+                <li>打开 VS Code</li>
+                <li>按 <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> 打开扩展面板</li>
+                <li>搜索 "Luminalog"</li>
+                <li>点击安装</li>
+              </ol>
+            </div>
+            <a
+              href="https://marketplace.visualstudio.com/items?itemName=lynn1286.luminalog"
+              class="btn btn-primary"
+              target="_blank"
+            >
+              前往市场
+            </a>
+          </div>
+
+          <div class="install-card">
+            <div class="install-icon">📦</div>
+            <h3>命令行安装</h3>
+            <p>使用 VS Code 命令行工具快速安装</p>
+            <div class="code-block">
+              <code>code --install-extension lynn1286.luminalog</code>
+              <button class="copy-btn" data-copy="code --install-extension lynn1286.luminalog">
+                复制
+              </button>
+            </div>
+          </div>
+
+          <div class="install-card">
+            <div class="install-icon">💾</div>
+            <h3>手动安装</h3>
+            <p>下载 .vsix 文件手动安装</p>
+            <div class="install-steps">
+              <ol>
+                <li>从 GitHub Releases 下载 .vsix 文件</li>
+                <li>打开 VS Code 扩展面板</li>
+                <li>点击 "..." → "从 VSIX 安装"</li>
+                <li>选择下载的文件</li>
+              </ol>
+            </div>
+            <a
+              href="https://github.com/lynn1286/luminalog/releases"
+              class="btn btn-secondary"
+              target="_blank"
+            >
+              下载 VSIX
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-content">
+          <div class="footer-brand">
+            <span class="logo">🚀</span>
+            <span class="brand-name">Luminalog</span>
+            <p>让调试更智能，让开发更高效</p>
+          </div>
+          <div class="footer-links">
+            <div class="footer-column">
+              <h4>资源</h4>
+              <ul>
+                <li><a href="docs/configuration.html">配置文档</a></li>
+                <li><a href="docs/usage.html">使用指南</a></li>
+                <li><a href="docs/api.html">API 文档</a></li>
+                <li>
+                  <a
+                    href="https://github.com/lynn1286/luminalog/blob/main/CHANGELOG.md"
+                    target="_blank"
+                    >更新日志</a
+                  >
+                </li>
+              </ul>
+            </div>
+            <div class="footer-column">
+              <h4>社区</h4>
+              <ul>
+                <li><a href="https://github.com/lynn1286/luminalog" target="_blank">GitHub</a></li>
+                <li>
+                  <a href="https://github.com/lynn1286/luminalog/issues" target="_blank"
+                    >问题反馈</a
+                  >
+                </li>
+                <li>
+                  <a href="https://github.com/lynn1286/luminalog/discussions" target="_blank"
+                    >讨论区</a
+                  >
+                </li>
+                <li>
+                  <a
+                    href="https://marketplace.visualstudio.com/items?itemName=lynn1286.luminalog"
+                    target="_blank"
+                    >VS Code 市场</a
+                  >
+                </li>
+              </ul>
+            </div>
+            <div class="footer-column">
+              <h4>关于</h4>
+              <ul>
+                <li><a href="https://github.com/lynn1286" target="_blank">作者</a></li>
+                <li>
+                  <a href="https://github.com/lynn1286/luminalog/blob/main/LICENSE" target="_blank"
+                    >开源协议</a
+                  >
+                </li>
+                <li>
+                  <a href="https://github.com/lynn1286/luminalog#contributing" target="_blank"
+                    >贡献指南</a
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <p>&copy; 2024 Luminalog. MIT License.</p>
+          <p>Made with ❤️ by <a href="https://github.com/lynn1286" target="_blank">lynn1286</a></p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+  </body>
+</html>
