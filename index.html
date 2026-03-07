@@ -155,8 +155,8 @@
             <textarea id="codeEditor" spellcheck="false">
 function getUserData(userId) {
   const user = fetchUser(userId);
-  const profile = user.profile;
-  return profile;
+  const name = user.name;
+  return name;
 }</textarea
             >
           </div>
@@ -172,9 +172,9 @@ function getUserData(userId) {
         <div class="demo-tips">
           <h4>💡 使用提示</h4>
           <ul>
-            <li>选中变量名（如 <code>user</code>、<code>profile</code>），点击"插入日志"</li>
-            <li>支持选中属性访问（如 <code>user.profile</code>）</li>
-            <li>尝试在不同位置插入日志，体验智能位置计算</li>
+            <li>选中变量名（如 <code>user</code>、<code>name</code>、<code>userId</code>），点击"插入日志"</li>
+            <li>查看彩色输出和随机 emoji 效果</li>
+            <li>体验函数名自动识别功能</li>
           </ul>
         </div>
       </div>
