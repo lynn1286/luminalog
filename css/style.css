@@ -232,7 +232,8 @@ body::before {
 
 .hero-demo {
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
+  padding: 20px;
 }
 
 .hero-demo .code-window {
@@ -434,6 +435,7 @@ body::before {
 .code-content {
   padding: var(--spacing-md);
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .code-content pre {
@@ -441,6 +443,9 @@ body::before {
   font-family: var(--font-mono);
   font-size: 0.875rem;
   line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-width: 100%;
 }
 
 .code-content code {
