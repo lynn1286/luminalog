@@ -232,8 +232,7 @@ body::before {
 
 .hero-demo {
   max-width: 100%;
-  overflow: visible;
-  padding: 20px;
+  overflow: hidden;
 }
 
 .hero-demo .code-window {
