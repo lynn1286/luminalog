@@ -27,6 +27,13 @@ import {
  */
 export class ContextRecognizer {
   /**
+   * 转义正则表达式中的特殊字符
+   */
+  private escapeRegExp(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  /**
    * 识别代码上下文
    */
   public recognize(
@@ -234,7 +241,8 @@ export class ContextRecognizer {
               // 当前行在 interface 块内部
               // 检查当前行是否是属性定义
               const currentLineText = doc.lineAt(line).text;
-              const propertyPattern = new RegExp(`\\b${varName}\\s*[?:]`);
+              const escapedVarName = this.escapeRegExp(varName);
+              const propertyPattern = new RegExp(`\\b${escapedVarName}\\s*[?:]`);
               if (propertyPattern.test(currentLineText)) {
                 return { type: CodeContextType.InterfaceProperty };
               }
@@ -304,7 +312,8 @@ export class ContextRecognizer {
               // 当前行在 enum 块内部
               // 检查当前行是否是枚举成员
               const currentLineText = doc.lineAt(line).text;
-              const memberPattern = new RegExp(`\\b${varName}\\s*[=,]?`);
+              const escapedVarName = this.escapeRegExp(varName);
+              const memberPattern = new RegExp(`\\b${escapedVarName}\\s*[=,]?`);
               if (memberPattern.test(currentLineText)) {
                 return { type: CodeContextType.EnumMember };
               }
@@ -375,7 +384,8 @@ export class ContextRecognizer {
               // 当前行在 type 块内部
               // 检查当前行是否是属性定义
               const currentLineText = doc.lineAt(line).text;
-              const propertyPattern = new RegExp(`\\b${varName}\\s*[?:]`);
+              const escapedVarName = this.escapeRegExp(varName);
+              const propertyPattern = new RegExp(`\\b${escapedVarName}\\s*[?:]`);
               if (propertyPattern.test(currentLineText)) {
                 return { type: CodeContextType.TypeAliasProperty };
               }
@@ -448,13 +458,14 @@ export class ContextRecognizer {
     // 检查是否在 type 或 interface 声明的右侧
     // 例如：type Name = ICommonPageList<...>
     // 或：interface Name extends BaseInterface
+    const escapedVarName = this.escapeRegExp(varName);
     const typeReferencePattern = new RegExp(
-      `\\b(type|interface)\\s+\\w+\\s*(=|extends)\\s*[^=]*\\b${varName}\\b`
+      `\\b(type|interface)\\s+\\w+\\s*(=|extends)\\s*[^=]*\\b${escapedVarName}\\b`
     );
 
     if (typeReferencePattern.test(lineText)) {
       // 确保不是声明的名称本身
-      const declarationNamePattern = new RegExp(`\\b(type|interface)\\s+${varName}\\b`);
+      const declarationNamePattern = new RegExp(`\\b(type|interface)\\s+${escapedVarName}\\b`);
       if (!declarationNamePattern.test(lineText)) {
         return { type: CodeContextType.TypeReference };
       }
@@ -476,7 +487,8 @@ export class ContextRecognizer {
     const lineText = doc.lineAt(line).text;
 
     // 检查是否是 type 声明行
-    const typePattern = new RegExp(`\\btype\\s+${varName}\\s*[=<]`);
+    const escapedVarName = this.escapeRegExp(varName);
+    const typePattern = new RegExp(`\\btype\\s+${escapedVarName}\\s*[=<]`);
     if (typePattern.test(lineText)) {
       return { type: CodeContextType.TypeAliasDeclaration };
     }
@@ -497,7 +509,8 @@ export class ContextRecognizer {
     const lineText = doc.lineAt(line).text;
 
     // 检查是否是 interface 声明行
-    const interfacePattern = new RegExp(`\\binterface\\s+${varName}\\b`);
+    const escapedVarName = this.escapeRegExp(varName);
+    const interfacePattern = new RegExp(`\\binterface\\s+${escapedVarName}\\b`);
     if (interfacePattern.test(lineText)) {
       return { type: CodeContextType.InterfaceDeclaration };
     }
@@ -518,7 +531,8 @@ export class ContextRecognizer {
     const lineText = doc.lineAt(line).text;
 
     // 检查是否是 enum 声明行
-    const enumPattern = new RegExp(`\\benum\\s+${varName}\\b`);
+    const escapedVarName = this.escapeRegExp(varName);
+    const enumPattern = new RegExp(`\\benum\\s+${escapedVarName}\\b`);
     if (enumPattern.test(lineText)) {
       return { type: CodeContextType.EnumDeclaration };
     }
@@ -541,7 +555,8 @@ export class ContextRecognizer {
 
     // 检查变量是否在尖括号内（泛型参数）
     // 例如：React.FC<LayerMoreSettingsProps> 或 Pick<ICommonParams, 'page'>
-    const genericPattern = new RegExp(`<[^>]*\\b${varName}\\b[^>]*>`);
+    const escapedVarName = this.escapeRegExp(varName);
+    const genericPattern = new RegExp(`<[^>]*\\b${escapedVarName}\\b[^>]*>`);
     if (genericPattern.test(lineText)) {
       // 进一步检查：确保不是在赋值语句的右侧
       // 例如：const value = <Component>...</Component> (JSX)
@@ -581,12 +596,13 @@ export class ContextRecognizer {
 
     // 检查变量是否在冒号之后（类型注解）
     // 例如：name: string, role: UserRole
-    const typeAnnotationPattern = new RegExp(`:\\s*${varName}\\b`);
+    const escapedVarName = this.escapeRegExp(varName);
+    const typeAnnotationPattern = new RegExp(`:\\s*${escapedVarName}\\b`);
     if (typeAnnotationPattern.test(lineText)) {
       // 确保不是对象属性（对象属性也有冒号）
       // 对象属性的模式：key: value，其中 value 可能是变量
       // 类型注解的模式：varName: Type
-      const match = lineText.match(new RegExp(`(\\w+)\\s*:\\s*${varName}\\b`));
+      const match = lineText.match(new RegExp(`(\\w+)\\s*:\\s*${escapedVarName}\\b`));
       if (match) {
         // 检查前面是否有 const/let/var/function 等关键字
         // 或者在函数参数中
