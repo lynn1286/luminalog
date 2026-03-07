@@ -37,13 +37,9 @@ export class ConfigService implements IConfigService {
         CONFIG_KEYS.ADD_SEMICOLON,
         DEFAULT_VALUES.ADD_SEMICOLON
       ),
-      insertEnclosingClass: workspaceConfig.get<boolean>(
-        CONFIG_KEYS.INSERT_CLASS,
-        DEFAULT_VALUES.INSERT_CLASS
-      ),
-      insertEnclosingFunction: workspaceConfig.get<boolean>(
-        CONFIG_KEYS.INSERT_FUNCTION,
-        DEFAULT_VALUES.INSERT_FUNCTION
+      insertContext: workspaceConfig.get<boolean>(
+        CONFIG_KEYS.INSERT_CONTEXT,
+        DEFAULT_VALUES.INSERT_CONTEXT
       ),
       quote: workspaceConfig.get<string>(CONFIG_KEYS.QUOTE, DEFAULT_VALUES.QUOTE),
       makeLogColorful: workspaceConfig.get<boolean>(CONFIG_KEYS.COLORFUL, DEFAULT_VALUES.COLORFUL),

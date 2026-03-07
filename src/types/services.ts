@@ -40,8 +40,7 @@ export interface ExtensionConfig {
   logMessagePrefix: string;
   randomEmojiPrefix: boolean;
   addSemicolonInTheEnd: boolean;
-  insertEnclosingClass: boolean;
-  insertEnclosingFunction: boolean;
+  insertContext: boolean;
   quote: string;
   makeLogColorful: boolean;
   logMessageFontSize: number;

@@ -57,17 +57,12 @@ export class LogMessageService implements ILogMessageService {
       varForPositionCalc
     );
 
-    // 如果是类声明上下文，不添加 classThatEncloses（因为不在类内部）
-    const classThatEncloses =
+    // 获取上下文名称（最外层 + 最近）
+    // 如果是类声明上下文，不添加上下文（因为不在类内部）
+    const contextNames =
       contextType === "ClassDeclaration"
-        ? ""
-        : this.codeAnalyzer.findEnclosingBlock(document, lineOfSelectedVar, "class");
-
-    const funcThatEncloses = this.codeAnalyzer.findEnclosingBlock(
-      document,
-      lineOfSelectedVar,
-      "function"
-    );
+        ? []
+        : this.codeAnalyzer.getContextNames(document, lineOfSelectedVar);
 
     const colorStyle = config.makeLogColorful
       ? this.colorService.formatColorStyle(
@@ -79,8 +74,7 @@ export class LogMessageService implements ILogMessageService {
 
     const generatorParams: GeneratorParams = {
       selectedVar,
-      classThatEncloses,
-      funcThatEncloses,
+      contextNames,
       config,
       colorStyle,
       indentation,
@@ -291,14 +285,8 @@ export class LogMessageService implements ILogMessageService {
       indentation = leadingSpaces === -1 ? "" : " ".repeat(leadingSpaces);
     }
 
-    // Get context information
-    const classThatEncloses = this.codeAnalyzer.findEnclosingBlock(document, lineOfCursor, "class");
-
-    const funcThatEncloses = this.codeAnalyzer.findEnclosingBlock(
-      document,
-      lineOfCursor,
-      "function"
-    );
+    // 获取上下文名称（最外层 + 最近）
+    const contextNames = this.codeAnalyzer.getContextNames(document, lineOfCursor);
 
     // Get color style
     const colorStyle = config.makeLogColorful
@@ -312,8 +300,7 @@ export class LogMessageService implements ILogMessageService {
     // Generate message using LogMessageGenerator with empty selectedVar
     const generatorParams: GeneratorParams = {
       selectedVar: "", // Empty for context-only
-      classThatEncloses,
-      funcThatEncloses,
+      contextNames,
       config,
       colorStyle,
       indentation,

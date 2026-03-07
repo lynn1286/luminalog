@@ -2,8 +2,7 @@ import { ColorStyle, ExtensionConfig } from "../types/services";
 
 export interface GeneratorParams {
   selectedVar: string;
-  classThatEncloses: string;
-  funcThatEncloses: string;
+  contextNames: string[];
   config: ExtensionConfig;
   colorStyle: ColorStyle;
   indentation: string;
@@ -31,8 +30,10 @@ export class LogMessageGenerator {
     const contextPath = this.buildContextPath(params);
     const semicolon = config.addSemicolonInTheEnd ? ";" : "";
 
-    // 如果有 contextPath，在变量名前加上分隔符
-    const separator = contextPath ? config.contextSeparator : "";
+    // 只有当有实际的上下文名称时，才添加分隔符
+    // 不能只检查 contextPath，因为可能只有 prefix（emoji）
+    const hasContext = params.contextNames.length > 0;
+    const separator = hasContext ? config.contextSeparator : "";
 
     return [
       "console.log(",
@@ -53,8 +54,8 @@ export class LogMessageGenerator {
     const { config, colorStyle } = params;
     const contextPath = this.buildContextPath(params).replace(/ -> $/, "");
 
-    // Check if there's meaningful context (function/class names), not just prefix
-    const hasContext = params.classThatEncloses || params.funcThatEncloses;
+    // Check if there's meaningful context
+    const hasContext = params.contextNames.length > 0;
     const displayText = hasContext ? contextPath : "🎯 Debug point";
 
     const semicolon = config.addSemicolonInTheEnd ? ";" : "";
@@ -80,12 +81,9 @@ export class LogMessageGenerator {
       parts.push(`${config.logMessagePrefix}: `);
     }
 
-    if (config.insertEnclosingClass && params.classThatEncloses) {
-      parts.push(params.classThatEncloses);
-    }
-
-    if (config.insertEnclosingFunction && params.funcThatEncloses) {
-      parts.push(params.funcThatEncloses);
+    // 如果启用了上下文插入，添加上下文名称
+    if (config.insertContext && params.contextNames.length > 0) {
+      parts.push(...params.contextNames);
     }
 
     // 使用自定义分隔符，但 prefix 后面不需要

@@ -152,6 +152,7 @@ class FunctionParamCalculator implements PositionCalculator {
     targetVariable: string
   ): ASTNode | null {
     let result: ASTNode | null = null;
+    let closestDistance = Infinity;
 
     walk(tree, (node: ASTNode): boolean | void => {
       if (isIdentifier(node) && node.name === targetVariable) {
@@ -160,14 +161,51 @@ class FunctionParamCalculator implements PositionCalculator {
 
         const nodeLine = document.positionAt(start).line;
         if (nodeLine === targetLine && this.isWithinParams(tree, node)) {
-          result = node;
-          return true;
+          // 检查是否在类型注解中
+          if (this.isInTypeAnnotation(tree, node)) {
+            return; // 跳过类型注解中的标识符
+          }
+
+          // 如果有多个匹配，选择最接近目标位置的
+          const nodeColumn = document.positionAt(start).character;
+          const distance = Math.abs(nodeColumn);
+          if (distance < closestDistance) {
+            closestDistance = distance;
+            result = node;
+          }
         }
       }
       return false;
     });
 
     return result;
+  }
+
+  /**
+   * 检查节点是否在类型注解中
+   */
+  private isInTypeAnnotation(tree: ASTNode, targetNode: ASTNode): boolean {
+    let inTypeAnnotation = false;
+
+    walk(tree, (node: ASTNode): boolean | void => {
+      // TypeScript 类型注解节点类型
+      if (
+        node.type === "TSTypeAnnotation" ||
+        node.type === "TSTypeReference" ||
+        node.type === "TSTypeLiteral" ||
+        node.type === "TSPropertySignature" ||
+        node.type === "TSInterfaceBody" ||
+        node.type === "TSTypeAliasDeclaration"
+      ) {
+        if (this.nodeContains(node, targetNode)) {
+          inTypeAnnotation = true;
+          return true;
+        }
+      }
+      return false;
+    });
+
+    return inTypeAnnotation;
   }
 
   private isWithinParams(tree: ASTNode, targetNode: ASTNode): boolean {
@@ -859,6 +897,18 @@ class InsideObjectLiteralCalculator implements PositionCalculator {
             }
           }
         }
+
+        // 查找函数调用表达式语句（独立的函数调用）
+        if (expr && isCallExpression(expr)) {
+          if (this.nodeContains(expr, objectNode)) {
+            // 获取整个表达式语句的结束位置
+            const stmtEnd = getNodeEnd(node);
+            if (stmtEnd !== undefined) {
+              endOffset = stmtEnd;
+              return true;
+            }
+          }
+        }
       }
 
       return false;
@@ -955,6 +1005,18 @@ class InsideArrayLiteralCalculator implements PositionCalculator {
         const expr = node.expression;
         if (expr && expr.type === "AssignmentExpression") {
           if (expr.right === arrayNode || this.nodeContains(expr.right, arrayNode)) {
+            // 获取整个表达式语句的结束位置
+            const stmtEnd = getNodeEnd(node);
+            if (stmtEnd !== undefined) {
+              endOffset = stmtEnd;
+              return true;
+            }
+          }
+        }
+
+        // 查找函数调用表达式语句（独立的函数调用）
+        if (expr && isCallExpression(expr)) {
+          if (this.nodeContains(expr, arrayNode)) {
             // 获取整个表达式语句的结束位置
             const stmtEnd = getNodeEnd(node);
             if (stmtEnd !== undefined) {

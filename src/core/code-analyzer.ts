@@ -27,10 +27,42 @@ export class CodeAnalyzer implements ICodeAnalyzer {
   }
 
   public isFunctionDeclaration(line: string): boolean {
+    // 首先排除 JavaScript 内置控制语句
+    if (this.isBuiltInStatement(line)) {
+      return false;
+    }
+
+    // Check if line contains function keyword (for multi-line declarations)
+    const hasFunctionKeyword = /\bfunction\s+[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/.test(line);
+
+    // Check if line is an arrow function or method declaration
+    const isArrowOrMethod = /[a-zA-Z_$][a-zA-Z0-9_$]*\s*[=:]\s*(async\s+)?\(.*\)\s*(=>|:)/.test(
+      line
+    );
+
+    // Check if line is a multi-line arrow function assignment (arrow on next line)
+    // Pattern: const name = ( or const name = async (
+    // Must be directly after =, not a function call like throttle(...)
+    const isMultiLineArrow = /(const|let|var)\s+[a-zA-Z_$][a-zA-Z0-9_$]*\s*=\s*(async\s+)?\(/.test(
+      line
+    );
+
+    // Check if line is a function expression: const name = function() {}
+    // Must have 'function' keyword after =
+    const isFunctionExpression =
+      /(const|let|var)\s+[a-zA-Z_$][a-zA-Z0-9_$]*\s*=\s*function\s*\(/.test(line);
+
+    // Original regex check (for single-line declarations with opening brace)
     const isNamed = REGEX.NAMED_FUNCTION.test(line);
     const isNonNamed = REGEX.NON_NAMED_FUNCTION.test(line);
-    const isExpression = REGEX.FUNCTION_EXPRESSION.test(line);
-    return (isNamed && !isNonNamed) || isExpression;
+
+    return (
+      (isNamed && !isNonNamed) ||
+      isFunctionExpression ||
+      hasFunctionKeyword ||
+      isArrowOrMethod ||
+      isMultiLineArrow
+    );
   }
 
   public isBuiltInStatement(line: string): boolean {
@@ -40,6 +72,16 @@ export class CodeAnalyzer implements ICodeAnalyzer {
   public extractClassName(line: string): string {
     if (line.split(/class /).length >= 2) {
       const textAfterClass = line.split(/class /)[1].trim();
+
+      // 提取类名：只取第一个单词，忽略 extends、implements、泛型等
+      // 匹配模式：标识符（可能带泛型）
+      const classNameMatch = textAfterClass.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)/);
+
+      if (classNameMatch) {
+        return classNameMatch[1];
+      }
+
+      // 回退：使用原来的逻辑
       const className = textAfterClass.split(" ")[0].replace("{", "");
       return className || textAfterClass.replace("{", "");
     }
@@ -47,11 +89,31 @@ export class CodeAnalyzer implements ICodeAnalyzer {
   }
 
   public extractFunctionName(line: string): string {
+    // Handle: export async function name(...) or export function name(...)
+    const exportFunctionMatch = line.match(
+      /export\s+(async\s+)?function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/
+    );
+    if (exportFunctionMatch) {
+      return exportFunctionMatch[2];
+    }
+
     // Handle: function name() {}
     if (/function(\s+)[a-zA-Z]+(\s*)\(.*\)(\s*){/.test(line)) {
       if (line.split("function ").length > 1) {
         return line.split("function ")[1].split("(")[0].replace(/(\s*)/g, "");
       }
+    }
+
+    // Handle: async function name(...) without export
+    const asyncFunctionMatch = line.match(/async\s+function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/);
+    if (asyncFunctionMatch) {
+      return asyncFunctionMatch[1];
+    }
+
+    // Handle: function name(...) - multi-line case
+    const functionMatch = line.match(/function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/);
+    if (functionMatch) {
+      return functionMatch[1];
     }
 
     // Handle: const name = () => {} or name() {}
@@ -61,9 +123,18 @@ export class CodeAnalyzer implements ICodeAnalyzer {
       // Has assignment
       if (/=/.test(leftPart)) {
         if (leftPart.split("=").length > 0) {
-          return leftPart
-            .split("=")[0]
-            .replace(/export |module.exports |const |var |let |=|(\s*)/g, "");
+          const beforeEquals = leftPart.split("=")[0];
+          // Remove keywords and extract name, also handle TypeScript type annotations
+          let name = beforeEquals.replace(/export |module.exports |const |var |let |(\s*)/g, "");
+
+          // Remove TypeScript type annotation (e.g., ": React.FC" or ": () => void")
+          // Match pattern: identifier followed by colon and type
+          const typeAnnotationMatch = name.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:.*/);
+          if (typeAnnotationMatch) {
+            name = typeAnnotationMatch[1];
+          }
+
+          return name;
         }
       } else {
         // Method declaration
@@ -72,6 +143,97 @@ export class CodeAnalyzer implements ICodeAnalyzer {
     }
 
     return "";
+  }
+
+  /**
+   * 获取代码上下文（最外层父级 + 最近的函数）
+   *
+   * 规则：
+   * - 在类的方法中：返回 [ClassName, methodName]
+   * - 在普通函数中：返回 [functionName]
+   * - 在嵌套函数中：返回 [outerFunction, innerFunction]
+   *
+   * @param document - VS Code 文档
+   * @param line - 行号（0-based）
+   * @returns [最外层父级名称, 最近的上下文名称] 或 []
+   */
+  public getContextNames(document: vscode.TextDocument, line: number): string[] {
+    const contexts: Array<{
+      line: number;
+      name: string;
+      type: "class" | "function";
+      indent: number;
+    }> = [];
+
+    // 向上查找所有的类和函数
+    let currentLine = line;
+    while (currentLine >= 0) {
+      const lineText = document.lineAt(currentLine).text;
+      const indent = this.getIndentLevel(lineText);
+
+      // 检查是否是类声明
+      if (this.isClassDeclaration(lineText)) {
+        const className = this.extractClassName(lineText);
+        if (className) {
+          contexts.push({ line: currentLine, name: className, type: "class", indent });
+        }
+      }
+
+      // 检查是否是函数声明（已经排除了 if/while/for 等）
+      if (this.isFunctionDeclaration(lineText)) {
+        const functionName = this.extractFunctionName(lineText);
+        // 额外验证：确保提取的名称不是空字符串，且不是控制语句关键字
+        if (functionName && !this.isControlKeyword(functionName)) {
+          contexts.push({ line: currentLine, name: functionName, type: "function", indent });
+        }
+      }
+
+      currentLine--;
+    }
+
+    // 如果没有找到任何上下文，返回空数组
+    if (contexts.length === 0) {
+      return [];
+    }
+
+    // 如果只有一个上下文，直接返回
+    if (contexts.length === 1) {
+      return [contexts[0].name];
+    }
+
+    // 多个上下文：需要判断是否真正嵌套
+    const outermost = contexts[contexts.length - 1];
+    const nearest = contexts[0];
+
+    // 如果最外层和最近的是同一个，只返回一个
+    if (outermost.line === nearest.line) {
+      return [outermost.name];
+    }
+
+    // 检查缩进级别：如果缩进相同，说明是平级的，不是嵌套关系
+    if (outermost.indent === nearest.indent) {
+      // 平级函数，只返回最近的
+      return [nearest.name];
+    }
+
+    // 真正的嵌套关系：返回最外层 + 最近的
+    return [outermost.name, nearest.name];
+  }
+
+  /**
+   * 获取行的缩进级别（前导空格数）
+   */
+  private getIndentLevel(line: string): number {
+    const match = line.match(/^(\s*)/);
+    return match ? match[1].length : 0;
+  }
+
+  /**
+   * 检查是否是控制语句关键字
+   */
+  private isControlKeyword(name: string): boolean {
+    const keywords = ["if", "else", "while", "for", "switch", "catch", "try", "finally"];
+    return keywords.includes(name);
   }
 
   public findEnclosingBlock(

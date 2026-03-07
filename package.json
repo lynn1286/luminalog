@@ -87,15 +87,10 @@
           "default": false,
           "description": "%configuration.addSemicolonInTheEnd.description%"
         },
-        "luminalog.insertEnclosingClass": {
+        "luminalog.insertContext": {
           "type": "boolean",
           "default": true,
-          "description": "%configuration.insertEnclosingClass.description%"
-        },
-        "luminalog.insertEnclosingFunction": {
-          "type": "boolean",
-          "default": true,
-          "description": "%configuration.insertEnclosingFunction.description%"
+          "description": "%configuration.insertContext.description%"
         },
         "luminalog.quote": {
           "type": "string",

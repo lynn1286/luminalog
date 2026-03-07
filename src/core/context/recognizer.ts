@@ -45,12 +45,12 @@ export class ContextRecognizer {
 
     // 按优先级检查各种上下文
     const recognizers = [
-      this.recognizeClassDeclaration.bind(this), // 类声明优先级最高
+      this.recognizeClassDeclaration.bind(this),
       this.recognizeFunctionParam.bind(this),
       this.recognizeReturnExpression.bind(this),
       this.recognizeConditionalExpression.bind(this),
-      this.recognizeTernaryOperation.bind(this), // 三元运算符优先级提高
-      this.recognizeObjectMethodCallResult.bind(this), // 对象方法调用优先于普通函数调用
+      this.recognizeTernaryOperation.bind(this),
+      this.recognizeObjectMethodCallResult.bind(this),
       this.recognizeFunctionCallResult.bind(this),
       this.recognizeStandaloneMethodCall.bind(this),
       this.recognizeObjectLiteral.bind(this),
@@ -61,8 +61,8 @@ export class ContextRecognizer {
       this.recognizePropertyAccess.bind(this),
       this.recognizeStandalonePropertyAccess.bind(this),
       this.recognizeExpressionStatement.bind(this),
-      this.recognizeInsideObjectLiteral.bind(this), // 最低优先级：对象内部
-      this.recognizeInsideArrayLiteral.bind(this), // 最低优先级：数组内部
+      this.recognizeInsideObjectLiteral.bind(this),
+      this.recognizeInsideArrayLiteral.bind(this),
     ];
 
     for (const recognizer of recognizers) {
@@ -146,9 +146,13 @@ export class ContextRecognizer {
 
           const paramLine = doc.positionAt(paramStart).line;
           const paramEnd = getNodeEnd(param);
-          const paramEndLine = paramEnd ? doc.positionAt(paramEnd).line : paramLine;
+          const paramEndLine = paramEnd !== undefined ? doc.positionAt(paramEnd).line : paramLine;
 
-          if (line >= paramLine && line <= paramEndLine) {
+          // 修复：对于跨行的参数，使用更宽松的范围检查
+          // 如果 paramEndLine < paramLine，说明位置信息有问题，使用 paramLine 作为范围
+          const effectiveEndLine = paramEndLine < paramLine ? paramLine : paramEndLine;
+
+          if (line >= paramLine && line <= effectiveEndLine) {
             if (this.matchesParameter(param, varName)) {
               found = true;
               return true;

@@ -97,6 +97,28 @@ export function createDisplayLogMessageCommand(
           }
         }
 
+        // 过滤 TypeScript 类型注解：检查选中的文本是否在类型注解位置
+        if (selectedVar && selectedVar.trim().length > 0) {
+          const line = document.lineAt(effectiveSelection.active.line);
+          const lineText = line.text;
+          const selectionStart = effectiveSelection.start.character;
+
+          // 检查选中文本前是否有冒号（类型注解的标志）
+          // 例如：{ params }: { params: { handle: string } }
+          //                      ^^^^^^ 这部分是类型注解
+          const textBeforeSelection = lineText.substring(0, selectionStart);
+          const lastColonIndex = textBeforeSelection.lastIndexOf(":");
+
+          if (lastColonIndex !== -1) {
+            // 检查冒号和选中文本之间是否只有空格和花括号
+            const betweenText = textBeforeSelection.substring(lastColonIndex + 1);
+            if (/^\s*\{?\s*$/.test(betweenText)) {
+              // 这是类型注解，跳过
+              continue;
+            }
+          }
+        }
+
         // 智能扩展选中的变量（处理属性访问）
         let originalPropertyName = selectedVar; // 保存原始属性名用于位置计算
         if (selectedVar && selectedVar.trim().length > 0) {
