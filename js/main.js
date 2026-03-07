@@ -97,6 +97,42 @@ function extractFunctionName(code, lineIndex) {
   return null;
 }
 
+// 智能扩展属性访问链
+function expandPropertyAccess(code, selectionStart, selectionEnd) {
+  const selectedText = code.substring(selectionStart, selectionEnd).trim();
+
+  // 向前查找，看是否有对象访问
+  let start = selectionStart - 1;
+  const parts = [selectedText];
+
+  while (start >= 0) {
+    const char = code[start];
+
+    if (char === '.') {
+      // 找到点，继续向前找标识符
+      let identStart = start - 1;
+      while (identStart >= 0 && /[a-zA-Z0-9_$]/.test(code[identStart])) {
+        identStart--;
+      }
+      identStart++;
+
+      if (identStart < start) {
+        const ident = code.substring(identStart, start);
+        parts.unshift(ident);
+        start = identStart - 1;
+      } else {
+        break;
+      }
+    } else if (/\s/.test(char)) {
+      start--;
+    } else {
+      break;
+    }
+  }
+
+  return parts.join('.');
+}
+
 // 插入日志
 if (insertLogBtn) {
   insertLogBtn.addEventListener("click", () => {
@@ -116,6 +152,9 @@ if (insertLogBtn) {
       return;
     }
 
+    // 智能扩展属性访问链
+    const expandedText = expandPropertyAccess(code, selectionStart, selectionEnd);
+
     // 获取当前行号
     const beforeSelection = code.substring(0, selectionStart);
     const lineIndex = beforeSelection.split("\n").length - 1;
@@ -128,8 +167,8 @@ if (insertLogBtn) {
     const bgColor = getRandomColor();
     const textColor = getTextColor(bgColor);
 
-    const contextPath = functionName ? `${functionName} -> ${selectedText}` : selectedText;
-    const logMessage = `console.log("%c ${emoji} ${contextPath} ", "font-size:16px;background-color:${bgColor};color:${textColor};", ${selectedText});`;
+    const contextPath = functionName ? `${functionName} -> ${expandedText}` : expandedText;
+    const logMessage = `console.log("%c ${emoji} ${contextPath} ", "font-size:16px;background-color:${bgColor};color:${textColor};", ${expandedText});`;
 
     // 在输出控制台显示
     const logDiv = document.createElement("div");
@@ -138,7 +177,7 @@ if (insertLogBtn) {
             <span style="font-size:16px;background-color:${bgColor};color:${textColor};padding:4px 8px;border-radius:4px;">
                 ${emoji} ${contextPath}
             </span>
-            <span style="color: var(--text-secondary); margin-left: 8px;">${selectedText}</span>
+            <span style="color: var(--text-secondary); margin-left: 8px;">${expandedText}</span>
         `;
     outputConsole.appendChild(logDiv);
 
