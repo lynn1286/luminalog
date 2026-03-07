@@ -30,6 +30,7 @@
     "commit": "git-cz",
     "compile": "tsc -p tsconfig.json",
     "compile:watch": "tsc -p tsconfig.json --watch",
+    "cz": "git-cz",
     "format": "prettier --write \"**/*.{ts,js,json,md}\" \"!node_modules/**\" \"!dist/**\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,md}\" \"!node_modules/**\" \"!dist/**\"",
     "format:pkg": "prettier --write package.json",
