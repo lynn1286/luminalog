@@ -45,7 +45,18 @@ export class ContextRecognizer {
 
     // 按优先级检查各种上下文
     const recognizers = [
+      this.recognizeInterfaceProperty.bind(this),
+      this.recognizeEnumMember.bind(this),
+      this.recognizeTypeAliasProperty.bind(this),
+      this.recognizeTypeUtilityKeyword.bind(this),
+      this.recognizeTypeReference.bind(this),
+      this.recognizeTypeAliasDeclaration.bind(this),
+      this.recognizeInterfaceDeclaration.bind(this),
+      this.recognizeEnumDeclaration.bind(this),
+      this.recognizeGenericTypeParameter.bind(this),
+      this.recognizeTypeAnnotation.bind(this),
       this.recognizeClassDeclaration.bind(this),
+      this.recognizeFunctionDeclaration.bind(this),
       this.recognizeFunctionParam.bind(this),
       this.recognizeReturnExpression.bind(this),
       this.recognizeConditionalExpression.bind(this),
@@ -123,6 +134,477 @@ export class ContextRecognizer {
   }
 
   /**
+   * 识别函数声明
+   * 只要选中的内容在函数声明行上，就识别为函数声明上下文
+   */
+  private recognizeFunctionDeclaration(
+    tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    _varName: string
+  ): CodeContext | null {
+    let found = false;
+
+    walk(tree, (node: ASTNode): boolean | void => {
+      if (found) return true;
+
+      // 检查是否是函数声明
+      if (node.type === "FunctionDeclaration") {
+        const funcStart = getNodeStart(node);
+        if (funcStart === undefined) return;
+
+        const funcStartLine = doc.positionAt(funcStart).line;
+
+        // 获取函数体开始位置（开括号位置）
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const funcBody = (node as any).body;
+        if (funcBody) {
+          const bodyStart = getNodeStart(funcBody);
+          if (bodyStart !== undefined) {
+            const bodyStartLine = doc.positionAt(bodyStart).line;
+
+            // 如果选中的行在函数声明行和函数体开始行之间（包括这两行）
+            // 说明是在函数声明部分，不是在函数体内部
+            if (line >= funcStartLine && line <= bodyStartLine) {
+              found = true;
+              return true;
+            }
+          }
+        }
+      }
+    });
+
+    return found ? { type: CodeContextType.FunctionDeclaration } : null;
+  }
+
+  /**
+   * 识别接口属性
+   * interface IProps { className?: string; }
+   */
+  private recognizeInterfaceProperty(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    // 向上查找，看是否在 interface 块内部
+    let currentLine = line;
+    let insideInterface = false;
+    let interfaceStartLine = -1;
+
+    while (currentLine >= 0) {
+      const lineText = doc.lineAt(currentLine).text;
+
+      // 检查是否是 interface 声明行
+      if (/\binterface\s+\w+/.test(lineText)) {
+        insideInterface = true;
+        interfaceStartLine = currentLine;
+        break;
+      }
+
+      // 如果遇到其他块的开始（class, function, type, enum），说明不在 interface 内
+      if (/\b(class|function|type|enum)\s+\w+/.test(lineText) && !/\binterface\s+/.test(lineText)) {
+        break;
+      }
+
+      currentLine--;
+    }
+
+    if (!insideInterface) {
+      return null;
+    }
+
+    // 检查是否在 interface 块的结束之前
+    // 从 interface 声明行向下查找闭合括号
+    let braceCount = 0;
+    let foundOpenBrace = false;
+
+    for (let i = interfaceStartLine; i < doc.lineCount; i++) {
+      const lineText = doc.lineAt(i).text;
+
+      for (const char of lineText) {
+        if (char === "{") {
+          braceCount++;
+          foundOpenBrace = true;
+        } else if (char === "}") {
+          braceCount--;
+          if (braceCount === 0 && foundOpenBrace) {
+            // 找到了闭合括号
+            if (line > interfaceStartLine && line < i) {
+              // 当前行在 interface 块内部
+              // 检查当前行是否是属性定义
+              const currentLineText = doc.lineAt(line).text;
+              const propertyPattern = new RegExp(`\\b${varName}\\s*[?:]`);
+              if (propertyPattern.test(currentLineText)) {
+                return { type: CodeContextType.InterfaceProperty };
+              }
+            }
+            return null;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别枚举成员
+   * enum Status { Active = 'active' }
+   */
+  private recognizeEnumMember(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    // 向上查找，看是否在 enum 块内部
+    let currentLine = line;
+    let insideEnum = false;
+    let enumStartLine = -1;
+
+    while (currentLine >= 0) {
+      const lineText = doc.lineAt(currentLine).text;
+
+      // 检查是否是 enum 声明行
+      if (/\benum\s+\w+/.test(lineText)) {
+        insideEnum = true;
+        enumStartLine = currentLine;
+        break;
+      }
+
+      // 如果遇到其他块的开始，说明不在 enum 内
+      if (/\b(class|function|type|interface)\s+\w+/.test(lineText)) {
+        break;
+      }
+
+      currentLine--;
+    }
+
+    if (!insideEnum) {
+      return null;
+    }
+
+    // 检查是否在 enum 块的结束之前
+    let braceCount = 0;
+    let foundOpenBrace = false;
+
+    for (let i = enumStartLine; i < doc.lineCount; i++) {
+      const lineText = doc.lineAt(i).text;
+
+      for (const char of lineText) {
+        if (char === "{") {
+          braceCount++;
+          foundOpenBrace = true;
+        } else if (char === "}") {
+          braceCount--;
+          if (braceCount === 0 && foundOpenBrace) {
+            // 找到了闭合括号
+            if (line > enumStartLine && line < i) {
+              // 当前行在 enum 块内部
+              // 检查当前行是否是枚举成员
+              const currentLineText = doc.lineAt(line).text;
+              const memberPattern = new RegExp(`\\b${varName}\\s*[=,]?`);
+              if (memberPattern.test(currentLineText)) {
+                return { type: CodeContextType.EnumMember };
+              }
+            }
+            return null;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别类型别名属性
+   * type UserInfo = { name: string; }
+   */
+  private recognizeTypeAliasProperty(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    // 向上查找，看是否在 type 块内部
+    let currentLine = line;
+    let insideType = false;
+    let typeStartLine = -1;
+
+    while (currentLine >= 0) {
+      const lineText = doc.lineAt(currentLine).text;
+
+      // 检查是否是 type 声明行（支持复杂类型：Pick, Omit, Partial 等）
+      // 匹配: type Name = { 或 type Name = Pick<...> & { 或 type Name = Omit<...> & {
+      if (/\btype\s+\w+\s*=\s*.*\{/.test(lineText)) {
+        insideType = true;
+        typeStartLine = currentLine;
+        break;
+      }
+
+      // 如果遇到其他块的开始，说明不在 type 内
+      if (/\b(class|function|interface|enum)\s+\w+/.test(lineText)) {
+        break;
+      }
+
+      currentLine--;
+    }
+
+    if (!insideType) {
+      return null;
+    }
+
+    // 检查是否在 type 块的结束之前
+    let braceCount = 0;
+    let foundOpenBrace = false;
+
+    for (let i = typeStartLine; i < doc.lineCount; i++) {
+      const lineText = doc.lineAt(i).text;
+
+      for (const char of lineText) {
+        if (char === "{") {
+          braceCount++;
+          foundOpenBrace = true;
+        } else if (char === "}") {
+          braceCount--;
+          if (braceCount === 0 && foundOpenBrace) {
+            // 找到了闭合括号
+            if (line > typeStartLine && line < i) {
+              // 当前行在 type 块内部
+              // 检查当前行是否是属性定义
+              const currentLineText = doc.lineAt(line).text;
+              const propertyPattern = new RegExp(`\\b${varName}\\s*[?:]`);
+              if (propertyPattern.test(currentLineText)) {
+                return { type: CodeContextType.TypeAliasProperty };
+              }
+            }
+            return null;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别类型工具关键字
+   * Pick, Omit, Partial, Required, Record, Exclude, Extract, etc.
+   */
+  private recognizeTypeUtilityKeyword(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    const lineText = doc.lineAt(line).text;
+
+    // TypeScript 内置类型工具关键字列表
+    const typeUtilities = [
+      "Pick",
+      "Omit",
+      "Partial",
+      "Required",
+      "Readonly",
+      "Record",
+      "Exclude",
+      "Extract",
+      "NonNullable",
+      "ReturnType",
+      "InstanceType",
+      "Parameters",
+      "ConstructorParameters",
+      "Awaited",
+    ];
+
+    // 检查变量名是否是类型工具关键字
+    if (!typeUtilities.includes(varName)) {
+      return null;
+    }
+
+    // 检查是否在 type 声明中使用
+    // 例如：type Name = Pick<T, K> & { ... }
+    if (/\btype\s+\w+\s*=/.test(lineText)) {
+      return { type: CodeContextType.TypeUtilityKeyword };
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别类型引用
+   * type Name = TypeReference<...> 或 interface Name extends TypeReference
+   */
+  private recognizeTypeReference(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    const lineText = doc.lineAt(line).text;
+
+    // 检查是否在 type 或 interface 声明的右侧
+    // 例如：type Name = ICommonPageList<...>
+    // 或：interface Name extends BaseInterface
+    const typeReferencePattern = new RegExp(
+      `\\b(type|interface)\\s+\\w+\\s*(=|extends)\\s*[^=]*\\b${varName}\\b`
+    );
+
+    if (typeReferencePattern.test(lineText)) {
+      // 确保不是声明的名称本身
+      const declarationNamePattern = new RegExp(`\\b(type|interface)\\s+${varName}\\b`);
+      if (!declarationNamePattern.test(lineText)) {
+        return { type: CodeContextType.TypeReference };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别类型别名声明
+   * type UserRole = 'admin' | 'user';
+   */
+  private recognizeTypeAliasDeclaration(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    const lineText = doc.lineAt(line).text;
+
+    // 检查是否是 type 声明行
+    const typePattern = new RegExp(`\\btype\\s+${varName}\\s*[=<]`);
+    if (typePattern.test(lineText)) {
+      return { type: CodeContextType.TypeAliasDeclaration };
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别接口声明
+   * interface IProps { ... }
+   */
+  private recognizeInterfaceDeclaration(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    const lineText = doc.lineAt(line).text;
+
+    // 检查是否是 interface 声明行
+    const interfacePattern = new RegExp(`\\binterface\\s+${varName}\\b`);
+    if (interfacePattern.test(lineText)) {
+      return { type: CodeContextType.InterfaceDeclaration };
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别枚举声明
+   * enum Status { ... }
+   */
+  private recognizeEnumDeclaration(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    const lineText = doc.lineAt(line).text;
+
+    // 检查是否是 enum 声明行
+    const enumPattern = new RegExp(`\\benum\\s+${varName}\\b`);
+    if (enumPattern.test(lineText)) {
+      return { type: CodeContextType.EnumDeclaration };
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别泛型类型参数
+   * React.FC<LayerMoreSettingsProps>
+   * Pick<ICommonParams, 'page'>
+   */
+  private recognizeGenericTypeParameter(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    const lineText = doc.lineAt(line).text;
+
+    // 检查变量是否在尖括号内（泛型参数）
+    // 例如：React.FC<LayerMoreSettingsProps> 或 Pick<ICommonParams, 'page'>
+    const genericPattern = new RegExp(`<[^>]*\\b${varName}\\b[^>]*>`);
+    if (genericPattern.test(lineText)) {
+      // 进一步检查：确保不是在赋值语句的右侧
+      // 例如：const value = <Component>...</Component> (JSX)
+      // 我们要排除 JSX，只匹配类型参数
+      const beforeVar = lineText.substring(0, lineText.indexOf(varName));
+      // 如果在 < 之后且在 = 之前，很可能是类型参数
+      const lastLt = beforeVar.lastIndexOf("<");
+      const lastEq = beforeVar.lastIndexOf("=");
+      const lastColon = beforeVar.lastIndexOf(":");
+
+      // 类型参数通常出现在：
+      // 1. 类型注解中：: Type<Param>
+      // 2. 泛型函数/类声明中：function foo<T>() 或 class Foo<T>
+      // 3. type 声明中：type Name = Pick<ICommonParams, ...>
+      if (
+        lastLt > lastEq &&
+        (lastColon > lastEq || /\bfunction\b|\bclass\b|\btype\b|\binterface\b/.test(beforeVar))
+      ) {
+        return { type: CodeContextType.GenericTypeParameter };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 识别类型注解
+   * name: string, role: UserRole
+   */
+  private recognizeTypeAnnotation(
+    _tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    const lineText = doc.lineAt(line).text;
+
+    // 检查变量是否在冒号之后（类型注解）
+    // 例如：name: string, role: UserRole
+    const typeAnnotationPattern = new RegExp(`:\\s*${varName}\\b`);
+    if (typeAnnotationPattern.test(lineText)) {
+      // 确保不是对象属性（对象属性也有冒号）
+      // 对象属性的模式：key: value，其中 value 可能是变量
+      // 类型注解的模式：varName: Type
+      const match = lineText.match(new RegExp(`(\\w+)\\s*:\\s*${varName}\\b`));
+      if (match) {
+        // 检查前面是否有 const/let/var/function 等关键字
+        // 或者在函数参数中
+        const beforeMatch = lineText.substring(0, lineText.indexOf(match[0]));
+        if (
+          /\b(const|let|var|function|=>|\()\s*$/.test(beforeMatch) ||
+          /^\s*$/.test(beforeMatch) ||
+          /,\s*$/.test(beforeMatch)
+        ) {
+          return { type: CodeContextType.TypeAnnotation };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * 识别函数参数
    */
   private recognizeFunctionParam(
@@ -188,9 +670,22 @@ export class ContextRecognizer {
         const endLine = doc.positionAt(nodeEnd).line;
 
         if (line >= startLine && line <= endLine) {
-          if (this.containsVariable(node.argument, varName)) {
-            found = true;
-            return true;
+          // 如果 varName 包含点号、括号或问号（属性链或函数调用），
+          // 检查 return 语句的文本是否包含这个表达式
+          if (varName.includes(".") || varName.includes("(") || varName.includes("?")) {
+            const returnText = doc.getText(
+              new vscode.Range(doc.positionAt(nodeStart), doc.positionAt(nodeEnd))
+            );
+            if (returnText.includes(varName)) {
+              found = true;
+              return true;
+            }
+          } else {
+            // 简单变量名，使用原来的逻辑
+            if (this.containsVariable(node.argument, varName)) {
+              found = true;
+              return true;
+            }
           }
         }
       }
@@ -816,7 +1311,15 @@ export class ContextRecognizer {
 
         // 检查目标行是否在对象内部
         if (line > startLine && line < endLine) {
-          // 检查对象内部是否包含目标变量
+          // 对于包含点号的变量名（如 OrderBy.updatedAt），只需要检查行是否在对象内部
+          // 不需要检查变量是否在对象中，因为它可能是属性值而不是属性名
+          if (varName.includes(".")) {
+            found = true;
+            parentObjectNode = node;
+            return true;
+          }
+
+          // 对于简单变量名，检查对象内部是否包含目标变量
           if (this.containsVariable(node, varName)) {
             found = true;
             parentObjectNode = node;
@@ -1030,18 +1533,32 @@ export class ContextRecognizer {
   /**
    * 查找节点对应的变量名
    * 遍历 AST，找到包含该节点的变量声明或赋值表达式
+   * 优先返回最直接（最近）的包含关系
    */
   private findVariableNameForNode(tree: ASTNode, targetNode: ASTNode): string | null {
     let varName: string | null = null;
+    let smallestDepth = Infinity; // 跟踪最小的嵌套深度
 
     walk(tree, (node: ASTNode): boolean | void => {
       // 查找变量声明
       if (isVariableDeclaration(node)) {
         for (const declarator of node.declarations) {
-          if (declarator.init === targetNode || this.nodeContains(declarator.init, targetNode)) {
+          // 检查是否是直接赋值（init === targetNode）
+          if (declarator.init === targetNode) {
             if (isIdentifier(declarator.id)) {
               varName = declarator.id.name;
-              return true;
+              return true; // 找到直接赋值，立即返回
+            }
+          }
+
+          // 检查是否包含在 init 中
+          if (declarator.init && this.nodeContains(declarator.init, targetNode)) {
+            // 计算嵌套深度
+            const depth = this.calculateNodeDepth(declarator.init, targetNode);
+
+            if (depth < smallestDepth && isIdentifier(declarator.id)) {
+              smallestDepth = depth;
+              varName = declarator.id.name;
             }
           }
         }
@@ -1051,16 +1568,68 @@ export class ContextRecognizer {
       if (node.type === "AssignmentExpression") {
         const left = node.left;
         const right = node.right;
-        if (right === targetNode || this.nodeContains(right, targetNode)) {
+
+        // 检查是否是直接赋值
+        if (right === targetNode) {
           if (isIdentifier(left)) {
             varName = left.name;
-            return true;
+            return true; // 找到直接赋值，立即返回
+          }
+        }
+
+        // 检查是否包含在 right 中
+        if (right && this.nodeContains(right, targetNode)) {
+          const depth = this.calculateNodeDepth(right, targetNode);
+
+          if (depth < smallestDepth && isIdentifier(left)) {
+            smallestDepth = depth;
+            varName = left.name;
           }
         }
       }
     });
 
     return varName;
+  }
+
+  /**
+   * 计算从父节点到子节点的嵌套深度
+   * 深度越小，说明关系越直接
+   */
+  private calculateNodeDepth(parent: ASTNode, child: ASTNode): number {
+    if (parent === child) return 0;
+
+    let minDepth = Infinity;
+
+    const traverse = (node: any, depth: number): void => {
+      if (node === child) {
+        minDepth = Math.min(minDepth, depth);
+        return;
+      }
+
+      if (!node || typeof node !== "object") return;
+
+      // 跳过位置信息属性
+      for (const key in node) {
+        if (key === "loc" || key === "range" || key === "start" || key === "end") {
+          continue;
+        }
+
+        const value = node[key];
+        if (value && typeof value === "object") {
+          if (Array.isArray(value)) {
+            for (const item of value) {
+              traverse(item, depth + 1);
+            }
+          } else {
+            traverse(value, depth + 1);
+          }
+        }
+      }
+    };
+
+    traverse(parent, 0);
+    return minDepth;
   }
 
   /**

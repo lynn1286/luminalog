@@ -32,13 +32,21 @@ export class CodeAnalyzer implements ICodeAnalyzer {
       return false;
     }
 
+    // 排除接口/类型定义中的函数类型属性
+    // 例如：onClose: () => void;
+    // 特征：以分号结尾，且没有函数体（没有 { }）
+    if (/:\s*\(.*\)\s*=>\s*[^{;]*;/.test(line)) {
+      return false;
+    }
+
     // Check if line contains function keyword (for multi-line declarations)
     const hasFunctionKeyword = /\bfunction\s+[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/.test(line);
 
     // Check if line is an arrow function or method declaration
-    const isArrowOrMethod = /[a-zA-Z_$][a-zA-Z0-9_$]*\s*[=:]\s*(async\s+)?\(.*\)\s*(=>|:)/.test(
-      line
-    );
+    // 支持带类型注解的箭头函数：const name: Type = (...) => 或 const name = (...) =>
+    const isArrowOrMethod =
+      /[a-zA-Z_$][a-zA-Z0-9_$]*\s*[=:]\s*(async\s+)?\(.*\)\s*(=>|:)/.test(line) ||
+      /[a-zA-Z_$][a-zA-Z0-9_$]*\s*:\s*[^=]+\s*=\s*(async\s+)?\(.*\)\s*=>/.test(line);
 
     // Check if line is a multi-line arrow function assignment (arrow on next line)
     // Pattern: const name = ( or const name = async (

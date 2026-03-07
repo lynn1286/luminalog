@@ -50,19 +50,38 @@ export class LogMessageService implements ILogMessageService {
       lineOfSelectedVar
     );
 
-    // 获取上下文类型，判断是否是类声明
+    // 获取上下文类型，判断是否是类声明、函数声明或类型声明
     const contextType = this.codeAnalyzer.getContextType(
       document,
       lineOfSelectedVar,
       varForPositionCalc
     );
 
+    // 如果是以下类型的声明，不应该生成日志（因为这些都是无意义的）
+    const meaninglessContextTypes = [
+      "ClassDeclaration",
+      "FunctionDeclaration",
+      "TypeAliasDeclaration",
+      "InterfaceDeclaration",
+      "EnumDeclaration",
+      "GenericTypeParameter",
+      "TypeAnnotation",
+      "InterfaceProperty",
+      "EnumMember",
+      "TypeAliasProperty",
+      "TypeUtilityKeyword",
+      "TypeReference",
+    ];
+
+    if (contextType && meaninglessContextTypes.includes(contextType)) {
+      return {
+        message: "",
+        insertLine: lineOfSelectedVar,
+      };
+    }
+
     // 获取上下文名称（最外层 + 最近）
-    // 如果是类声明上下文，不添加上下文（因为不在类内部）
-    const contextNames =
-      contextType === "ClassDeclaration"
-        ? []
-        : this.codeAnalyzer.getContextNames(document, lineOfSelectedVar);
+    const contextNames = this.codeAnalyzer.getContextNames(document, lineOfSelectedVar);
 
     const colorStyle = config.makeLogColorful
       ? this.colorService.formatColorStyle(

@@ -59,6 +59,39 @@ export enum CodeContextType {
 
   /** 类声明 */
   ClassDeclaration = "ClassDeclaration",
+
+  /** 函数声明 */
+  FunctionDeclaration = "FunctionDeclaration",
+
+  /** 类型别名声明 */
+  TypeAliasDeclaration = "TypeAliasDeclaration",
+
+  /** 接口声明 */
+  InterfaceDeclaration = "InterfaceDeclaration",
+
+  /** 枚举声明 */
+  EnumDeclaration = "EnumDeclaration",
+
+  /** 泛型类型参数 */
+  GenericTypeParameter = "GenericTypeParameter",
+
+  /** 类型注解 */
+  TypeAnnotation = "TypeAnnotation",
+
+  /** 接口属性 */
+  InterfaceProperty = "InterfaceProperty",
+
+  /** 枚举成员 */
+  EnumMember = "EnumMember",
+
+  /** 类型别名属性 */
+  TypeAliasProperty = "TypeAliasProperty",
+
+  /** 类型工具关键字 */
+  TypeUtilityKeyword = "TypeUtilityKeyword",
+
+  /** 类型引用（在 type/interface 声明右侧） */
+  TypeReference = "TypeReference",
 }
 
 /**

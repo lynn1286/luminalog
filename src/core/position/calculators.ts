@@ -390,9 +390,26 @@ class ReturnExpressionCalculator implements PositionCalculator {
         const endLine = document.positionAt(end).line;
 
         if (targetLine >= startLine && targetLine <= endLine) {
-          if (this.containsVariable(returnStmt.argument, targetVariable)) {
-            returnNode = returnStmt;
-            return true;
+          // 如果 targetVariable 包含点号、括号或问号（属性链或函数调用），
+          // 检查 return 语句的文本是否包含这个表达式
+          if (
+            targetVariable.includes(".") ||
+            targetVariable.includes("(") ||
+            targetVariable.includes("?")
+          ) {
+            const returnText = document.getText(
+              new vscode.Range(document.positionAt(start), document.positionAt(end))
+            );
+            if (returnText.includes(targetVariable)) {
+              returnNode = returnStmt;
+              return true;
+            }
+          } else {
+            // 简单变量名，使用原来的逻辑
+            if (this.containsVariable(returnStmt.argument, targetVariable)) {
+              returnNode = returnStmt;
+              return true;
+            }
           }
         }
       }
@@ -868,17 +885,31 @@ class InsideObjectLiteralCalculator implements PositionCalculator {
 
   private findParentEnd(tree: ASTNode, objectNode: ASTNode): number {
     let endOffset = -1;
+    let smallestDepth = Infinity;
 
     walk(tree, (node: ASTNode): boolean | void => {
       // 查找变量声明语句
       if (isVariableDeclaration(node)) {
         for (const declarator of node.declarations) {
-          if (declarator.init === objectNode || this.nodeContains(declarator.init, objectNode)) {
-            // 获取整个变量声明语句的结束位置
+          // 检查是否是直接赋值
+          if (declarator.init === objectNode) {
             const stmtEnd = getNodeEnd(node);
             if (stmtEnd !== undefined) {
               endOffset = stmtEnd;
-              return true;
+              return true; // 找到直接赋值，立即返回
+            }
+          }
+
+          // 检查是否包含在 init 中
+          if (declarator.init && this.nodeContains(declarator.init, objectNode)) {
+            const depth = this.calculateNodeDepth(declarator.init, objectNode);
+
+            if (depth < smallestDepth) {
+              const stmtEnd = getNodeEnd(node);
+              if (stmtEnd !== undefined) {
+                smallestDepth = depth;
+                endOffset = stmtEnd;
+              }
             }
           }
         }
@@ -888,12 +919,25 @@ class InsideObjectLiteralCalculator implements PositionCalculator {
       if (node.type === "ExpressionStatement") {
         const expr = node.expression;
         if (expr && expr.type === "AssignmentExpression") {
-          if (expr.right === objectNode || this.nodeContains(expr.right, objectNode)) {
-            // 获取整个表达式语句的结束位置
+          // 检查是否是直接赋值
+          if (expr.right === objectNode) {
             const stmtEnd = getNodeEnd(node);
             if (stmtEnd !== undefined) {
               endOffset = stmtEnd;
               return true;
+            }
+          }
+
+          // 检查是否包含在 right 中
+          if (expr.right && this.nodeContains(expr.right, objectNode)) {
+            const depth = this.calculateNodeDepth(expr.right, objectNode);
+
+            if (depth < smallestDepth) {
+              const stmtEnd = getNodeEnd(node);
+              if (stmtEnd !== undefined) {
+                smallestDepth = depth;
+                endOffset = stmtEnd;
+              }
             }
           }
         }
@@ -901,11 +945,14 @@ class InsideObjectLiteralCalculator implements PositionCalculator {
         // 查找函数调用表达式语句（独立的函数调用）
         if (expr && isCallExpression(expr)) {
           if (this.nodeContains(expr, objectNode)) {
-            // 获取整个表达式语句的结束位置
-            const stmtEnd = getNodeEnd(node);
-            if (stmtEnd !== undefined) {
-              endOffset = stmtEnd;
-              return true;
+            const depth = this.calculateNodeDepth(expr, objectNode);
+
+            if (depth < smallestDepth) {
+              const stmtEnd = getNodeEnd(node);
+              if (stmtEnd !== undefined) {
+                smallestDepth = depth;
+                endOffset = stmtEnd;
+              }
             }
           }
         }
@@ -915,6 +962,44 @@ class InsideObjectLiteralCalculator implements PositionCalculator {
     });
 
     return endOffset;
+  }
+
+  /**
+   * 计算从父节点到子节点的嵌套深度
+   */
+  private calculateNodeDepth(parent: any, child: any): number {
+    if (parent === child) return 0;
+
+    let minDepth = Infinity;
+
+    const traverse = (node: any, depth: number): void => {
+      if (node === child) {
+        minDepth = Math.min(minDepth, depth);
+        return;
+      }
+
+      if (!node || typeof node !== "object") return;
+
+      for (const key in node) {
+        if (key === "loc" || key === "range" || key === "start" || key === "end") {
+          continue;
+        }
+
+        const value = node[key];
+        if (value && typeof value === "object") {
+          if (Array.isArray(value)) {
+            for (const item of value) {
+              traverse(item, depth + 1);
+            }
+          } else {
+            traverse(value, depth + 1);
+          }
+        }
+      }
+    };
+
+    traverse(parent, 0);
+    return minDepth;
   }
 
   private nodeContains(parent: ASTNode | null | undefined, child: ASTNode): boolean {
