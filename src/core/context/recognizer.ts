@@ -56,8 +56,8 @@ export class ContextRecognizer {
       this.recognizeGenericTypeParameter.bind(this),
       this.recognizeTypeAnnotation.bind(this),
       this.recognizeClassDeclaration.bind(this),
+      this.recognizeFunctionParam.bind(this), // 函数参数优先于函数声明
       this.recognizeFunctionDeclaration.bind(this),
-      this.recognizeFunctionParam.bind(this),
       this.recognizeReturnExpression.bind(this),
       this.recognizeConditionalExpression.bind(this),
       this.recognizeTernaryOperation.bind(this),
