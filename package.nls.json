@@ -1,0 +1,21 @@
+{
+  "displayName": "LuminaLog",
+  "description": "Add soul to console.log and make debugging a visual delight.",
+  "command.displayLogMessage.title": "Insert Console.log with Emoji",
+  "command.commentAllLogMessages.title": "Comment All Console.log",
+  "command.uncommentAllLogMessages.title": "Uncomment All Console.log",
+  "command.deleteAllLogMessages.title": "Delete All Console.log",
+  "configuration.title": "Console.log with Emoji",
+  "configuration.wrapLogMessage.description": "Wrap log messages with separators",
+  "configuration.logMessagePrefix.description": "Custom prefix for log messages",
+  "configuration.randomEmojiPrefix.description": "Add random emoji prefix to log messages",
+  "configuration.addSemicolonInTheEnd.description": "Add semicolon at the end of log messages",
+  "configuration.insertEnclosingClass.description": "Insert enclosing class name in log messages",
+  "configuration.insertEnclosingFunction.description": "Insert enclosing function name in log messages",
+  "configuration.quote.description": "Quote style for log messages",
+  "configuration.makeLogColorful.description": "Add color styles to log messages",
+  "configuration.logMessageFontSize.description": "Font size for log messages",
+  "configuration.contextSeparator.description": "Separator between context parts (class, function, variable)",
+  "configuration.customEmojis.description": "Custom emoji list, randomly select one as log prefix",
+  "configuration.customColors.description": "Custom color list (hex format), randomly select one as log background color"
+}

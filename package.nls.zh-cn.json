@@ -1,0 +1,21 @@
+{
+  "displayName": "LuminaLog",
+  "description": "赋予 console.log 灵魂，让调试成为一种视觉享受。",
+  "command.displayLogMessage.title": "插入带 Emoji 的 Console.log",
+  "command.commentAllLogMessages.title": "注释所有 Console.log",
+  "command.uncommentAllLogMessages.title": "取消注释所有 Console.log",
+  "command.deleteAllLogMessages.title": "删除所有 Console.log",
+  "configuration.title": "带 Emoji 的 Console.log",
+  "configuration.wrapLogMessage.description": "用花括号包裹日志消息",
+  "configuration.logMessagePrefix.description": "日志消息的自定义前缀",
+  "configuration.randomEmojiPrefix.description": "为日志消息添加随机 emoji 前缀",
+  "configuration.addSemicolonInTheEnd.description": "在日志消息末尾添加分号",
+  "configuration.insertEnclosingClass.description": "在日志消息中插入所在类名",
+  "configuration.insertEnclosingFunction.description": "在日志消息中插入所在函数名",
+  "configuration.quote.description": "日志消息的引号风格",
+  "configuration.makeLogColorful.description": "为日志消息添加颜色样式",
+  "configuration.logMessageFontSize.description": "日志消息的字体大小",
+  "configuration.contextSeparator.description": "上下文部分之间的分隔符（类名、函数名、变量名）",
+  "configuration.customEmojis.description": "自定义 emoji 列表，随机选择一个作为日志前缀",
+  "configuration.customColors.description": "自定义颜色列表（十六进制格式），随机选择一个作为日志背景色"
+}
