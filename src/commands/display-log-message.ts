@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { LogMessageService } from "../services/log-message-service";
 import { getActiveEditor, getTabSize, insertText } from "../utils/editor-helper";
 import { handleError } from "../utils/error-handler";
+import { buildFunctionParamTransform } from "../utils/function-param-transform";
 
 /**
  * 智能扩展选中的变量
@@ -399,6 +400,25 @@ export function createDisplayLogMessageCommand(
 
         // 如果返回空消息，说明不应该生成日志（例如在类声明行）
         if (!result.message || result.message.trim().length === 0) {
+          continue;
+        }
+
+        const functionParamTransform = buildFunctionParamTransform(
+          document,
+          lineOfSelectedVar,
+          originalPropertyName || selectedVar,
+          tabSize,
+          result.message
+        );
+
+        if (functionParamTransform) {
+          await editor.edit(editBuilder => {
+            editBuilder.replace(functionParamTransform.openRange, functionParamTransform.openText);
+            editBuilder.replace(
+              functionParamTransform.closeRange,
+              functionParamTransform.closeText
+            );
+          });
           continue;
         }
 

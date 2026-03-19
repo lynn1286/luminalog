@@ -168,6 +168,7 @@ export class CodeAnalyzer implements ICodeAnalyzer {
   public getContextNames(document: vscode.TextDocument, line: number): string[] {
     const contexts: Array<{
       line: number;
+      endLine: number;
       name: string;
       type: "class" | "function";
       indent: number;
@@ -182,17 +183,30 @@ export class CodeAnalyzer implements ICodeAnalyzer {
       // 检查是否是类声明
       if (this.isClassDeclaration(lineText)) {
         const className = this.extractClassName(lineText);
-        if (className) {
-          contexts.push({ line: currentLine, name: className, type: "class", indent });
+        const endLine = this.findBlockEndLine(document, currentLine);
+        if (className && endLine !== null && line <= endLine) {
+          contexts.push({ line: currentLine, endLine, name: className, type: "class", indent });
         }
       }
 
       // 检查是否是函数声明（已经排除了 if/while/for 等）
       if (this.isFunctionDeclaration(lineText)) {
         const functionName = this.extractFunctionName(lineText);
+        const endLine = this.findBlockEndLine(document, currentLine);
         // 额外验证：确保提取的名称不是空字符串，且不是控制语句关键字
-        if (functionName && !this.isControlKeyword(functionName)) {
-          contexts.push({ line: currentLine, name: functionName, type: "function", indent });
+        if (
+          functionName &&
+          !this.isControlKeyword(functionName) &&
+          endLine !== null &&
+          line <= endLine
+        ) {
+          contexts.push({
+            line: currentLine,
+            endLine,
+            name: functionName,
+            type: "function",
+            indent,
+          });
         }
       }
 
@@ -209,9 +223,17 @@ export class CodeAnalyzer implements ICodeAnalyzer {
       return [contexts[0].name];
     }
 
-    // 多个上下文：需要判断是否真正嵌套
-    const outermost = contexts[contexts.length - 1];
-    const nearest = contexts[0];
+    // 多个上下文：按作用域范围排序，取最外层和最近的
+    const sortedContexts = [...contexts].sort((a, b) => {
+      if (a.line !== b.line) {
+        return a.line - b.line;
+      }
+
+      return b.endLine - a.endLine;
+    });
+
+    const outermost = sortedContexts[0];
+    const nearest = sortedContexts[sortedContexts.length - 1];
 
     // 如果最外层和最近的是同一个，只返回一个
     if (outermost.line === nearest.line) {
@@ -237,11 +259,102 @@ export class CodeAnalyzer implements ICodeAnalyzer {
   }
 
   /**
+   * 查找代码块的结束行
+   * 用于确认当前行是否真的位于该类/函数作用域内，而不是仅仅出现在声明之后
+   */
+  private findBlockEndLine(document: vscode.TextDocument, startLine: number): number | null {
+    const blockStart = this.findBlockStartPosition(document, startLine);
+    if (!blockStart) {
+      return null;
+    }
+
+    let braceCount = 0;
+
+    for (let i = blockStart.line; i < document.lineCount; i++) {
+      const lineText = document.lineAt(i).text;
+      const startChar = i === blockStart.line ? blockStart.character : 0;
+
+      for (let j = startChar; j < lineText.length; j++) {
+        const char = lineText[j];
+        if (char === "{") {
+          braceCount++;
+        } else if (char === "}") {
+          braceCount--;
+
+          if (braceCount === 0) {
+            return i;
+          }
+        }
+      }
+    }
+
+    return document.lineCount - 1;
+  }
+
+  /**
+   * 查找声明体真正的起始位置
+   * 对于带解构参数的函数，应该跳过参数里的 { }，从函数体的 { 开始计数
+   */
+  private findBlockStartPosition(
+    document: vscode.TextDocument,
+    startLine: number
+  ): { line: number; character: number } | null {
+    for (let i = startLine; i < document.lineCount; i++) {
+      const lineText = document.lineAt(i).text;
+      if (!lineText.includes("{")) {
+        continue;
+      }
+
+      const braceIndex = i === startLine ? lineText.lastIndexOf("{") : lineText.indexOf("{");
+      if (braceIndex !== -1) {
+        return { line: i, character: braceIndex };
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * 检查是否是控制语句关键字
    */
   private isControlKeyword(name: string): boolean {
     const keywords = ["if", "else", "while", "for", "switch", "catch", "try", "finally"];
     return keywords.includes(name);
+  }
+
+  /**
+   * 基于文本扫描语句结束行
+   * 用于 AST 解析失败时的安全兜底
+   */
+  private findStatementEndLineBySyntax(
+    document: vscode.TextDocument,
+    startLine: number
+  ): number | null {
+    let parenCount = 0;
+    let braceCount = 0;
+    let bracketCount = 0;
+
+    for (let line = startLine; line < document.lineCount; line++) {
+      const text = document.lineAt(line).text;
+
+      for (const char of text) {
+        if (char === "(") parenCount++;
+        if (char === ")") parenCount--;
+        if (char === "{") braceCount++;
+        if (char === "}") braceCount--;
+        if (char === "[") bracketCount++;
+        if (char === "]") bracketCount--;
+      }
+
+      const trimmed = text.trim();
+      const balanced = parenCount === 0 && braceCount === 0 && bracketCount === 0;
+
+      if (balanced && trimmed.endsWith(";")) {
+        return line;
+      }
+    }
+
+    return null;
   }
 
   public findEnclosingBlock(
@@ -294,6 +407,11 @@ export class CodeAnalyzer implements ICodeAnalyzer {
 
     if (insertLine !== null) {
       return insertLine;
+    }
+
+    const syntaxEndLine = this.findStatementEndLineBySyntax(document, selectionLine);
+    if (syntaxEndLine !== null && syntaxEndLine > selectionLine) {
+      return syntaxEndLine + 1;
     }
 
     // 如果分析失败（例如语法错误），回退到简单的下一行

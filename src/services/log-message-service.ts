@@ -37,17 +37,10 @@ export class LogMessageService implements ILogMessageService {
     // 使用原始属性名进行位置计算（如果提供），否则使用 selectedVar
     const varForPositionCalc = originalPropertyName || selectedVar;
 
-    const insertLine = this.codeAnalyzer.calculateInsertLine(
+    let insertLine = this.codeAnalyzer.calculateInsertLine(
       document,
       lineOfSelectedVar,
       varForPositionCalc
-    );
-
-    // 使用插入行的缩进，而不是选中行的缩进
-    const indentation = this.calculateInsertLineIndentation(
-      document,
-      insertLine,
-      lineOfSelectedVar
     );
 
     // 获取上下文类型，判断是否是类声明、函数声明或类型声明
@@ -55,6 +48,21 @@ export class LogMessageService implements ILogMessageService {
       document,
       lineOfSelectedVar,
       varForPositionCalc
+    );
+
+    if (contextType !== "FunctionParam") {
+      insertLine = this.adjustInsertLineForMultilineStatement(
+        document,
+        lineOfSelectedVar,
+        insertLine
+      );
+    }
+
+    // 使用插入行的缩进，而不是选中行的缩进
+    const indentation = this.calculateInsertLineIndentation(
+      document,
+      insertLine,
+      lineOfSelectedVar
     );
 
     // 如果是以下类型的声明，不应该生成日志（因为这些都是无意义的）
@@ -148,6 +156,58 @@ export class LogMessageService implements ILogMessageService {
     // 使用插入行的缩进
     const leadingSpaces = insertLineText.search(/\S/);
     return leadingSpaces === -1 ? "" : " ".repeat(leadingSpaces);
+  }
+
+  /**
+   * 当插入点仍然落在“当前行下一行”时，检查当前是否处于未结束的多行语句中。
+   * 如果是，则把插入点提升到完整语句末尾，避免破坏链式调用或跨行表达式语法。
+   */
+  private adjustInsertLineForMultilineStatement(
+    document: vscode.TextDocument,
+    selectedLine: number,
+    insertLine: number
+  ): number {
+    if (insertLine !== selectedLine + 1) {
+      return insertLine;
+    }
+
+    const statementEndLine = this.findStatementEndLineBySyntax(document, selectedLine);
+    if (statementEndLine !== null && statementEndLine > selectedLine) {
+      return statementEndLine + 1;
+    }
+
+    return insertLine;
+  }
+
+  private findStatementEndLineBySyntax(
+    document: vscode.TextDocument,
+    startLine: number
+  ): number | null {
+    let parenCount = 0;
+    let braceCount = 0;
+    let bracketCount = 0;
+
+    for (let line = startLine; line < document.lineCount; line++) {
+      const text = document.lineAt(line).text;
+
+      for (const char of text) {
+        if (char === "(") parenCount++;
+        if (char === ")") parenCount--;
+        if (char === "{") braceCount++;
+        if (char === "}") braceCount--;
+        if (char === "[") bracketCount++;
+        if (char === "]") bracketCount--;
+      }
+
+      const trimmed = text.trim();
+      const balanced = parenCount === 0 && braceCount === 0 && bracketCount === 0;
+
+      if (balanced && trimmed.endsWith(";")) {
+        return line;
+      }
+    }
+
+    return null;
   }
 
   public detectAllLogMessages(document: vscode.TextDocument, tabSize: number): LogMessage[] {

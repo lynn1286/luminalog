@@ -639,22 +639,13 @@ export class ContextRecognizer {
         if (!parameters || !Array.isArray(parameters)) return;
 
         for (const param of parameters) {
-          const paramStart = getNodeStart(param);
-          if (paramStart === undefined) continue;
+          if (!this.matchesParameter(param, varName)) {
+            continue;
+          }
 
-          const paramLine = doc.positionAt(paramStart).line;
-          const paramEnd = getNodeEnd(param);
-          const paramEndLine = paramEnd !== undefined ? doc.positionAt(paramEnd).line : paramLine;
-
-          // 修复：对于跨行的参数，使用更宽松的范围检查
-          // 如果 paramEndLine < paramLine，说明位置信息有问题，使用 paramLine 作为范围
-          const effectiveEndLine = paramEndLine < paramLine ? paramLine : paramEndLine;
-
-          if (line >= paramLine && line <= effectiveEndLine) {
-            if (this.matchesParameter(param, varName)) {
-              found = true;
-              return true;
-            }
+          if (this.isParameterMatchOnLine(param, doc, line, varName)) {
+            found = true;
+            return true;
           }
         }
       }
@@ -1245,6 +1236,47 @@ export class ContextRecognizer {
     }
 
     return false;
+  }
+
+  private isParameterMatchOnLine(
+    param: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): boolean {
+    const paramStart = getNodeStart(param);
+    if (paramStart !== undefined) {
+      const paramLine = doc.positionAt(paramStart).line;
+      const paramEnd = getNodeEnd(param);
+      const paramEndLine = paramEnd !== undefined ? doc.positionAt(paramEnd).line : paramLine;
+      const effectiveEndLine = paramEndLine < paramLine ? paramLine : paramEndLine;
+
+      if (line >= paramLine && line <= effectiveEndLine) {
+        return true;
+      }
+    }
+
+    let found = false;
+
+    walk(param, (node: ASTNode): boolean | void => {
+      if (!isIdentifier(node) || node.name !== varName) {
+        return false;
+      }
+
+      const start = getNodeStart(node);
+      if (start === undefined) {
+        return false;
+      }
+
+      if (doc.positionAt(start).line === line) {
+        found = true;
+        return true;
+      }
+
+      return false;
+    });
+
+    return found;
   }
 
   private containsVariable(node: ASTNode, varName: string): boolean {

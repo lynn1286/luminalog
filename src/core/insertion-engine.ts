@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import path from "path";
-import { parseCode, getNodeStart } from "./ast-utils";
+import { parseCode, getNodeEnd, getNodeStart } from "./ast-utils";
 import { ContextRecognizer } from "./context/recognizer";
 import { PositionCalculatorFactory } from "./position/calculators";
 
@@ -43,6 +43,16 @@ export class InsertionAnalysisEngine {
     // 2. 识别代码上下文
     const context = this.contextRecognizer.recognize(document, targetLine, targetVariable);
     if (!context) {
+      const syntaxEndLine = this.findStatementEndLineBySyntax(document, targetLine);
+      if (syntaxEndLine !== null && syntaxEndLine > targetLine) {
+        return syntaxEndLine + 1;
+      }
+
+      const statementEndLine = this.getStatementEndLineFromTree(syntaxTree, document, targetLine);
+      if (statementEndLine !== null) {
+        return statementEndLine + 1;
+      }
+
       return targetLine + 1; // 默认插入到下一行
     }
 
@@ -197,6 +207,67 @@ export class InsertionAnalysisEngine {
     if (start !== undefined) {
       const startPosition = document.positionAt(start);
       return startPosition.line;
+    }
+
+    return null;
+  }
+
+  /**
+   * 基于文本扫描语句结束行
+   * 用于兜底处理多行链式调用、跨行表达式等 AST 上下文未命中的场景
+   */
+  private findStatementEndLineBySyntax(
+    document: vscode.TextDocument,
+    startLine: number
+  ): number | null {
+    let parenCount = 0;
+    let braceCount = 0;
+    let bracketCount = 0;
+
+    for (let line = startLine; line < document.lineCount; line++) {
+      const text = document.lineAt(line).text;
+
+      for (const char of text) {
+        if (char === "(") parenCount++;
+        if (char === ")") parenCount--;
+        if (char === "{") braceCount++;
+        if (char === "}") braceCount--;
+        if (char === "[") bracketCount++;
+        if (char === "]") bracketCount--;
+      }
+
+      const trimmed = text.trim();
+      const balanced = parenCount === 0 && braceCount === 0 && bracketCount === 0;
+
+      if (balanced && trimmed.endsWith(";")) {
+        return line;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 获取语句的结束行
+   * 用于在无法识别具体上下文时，仍然安全地插入到完整语句之后
+   */
+  private getStatementEndLineFromTree(
+    syntaxTree: any,
+    document: vscode.TextDocument,
+    targetLine: number
+  ): number | null {
+    const statement = this.findStatementAtLine(syntaxTree, targetLine);
+    if (!statement) {
+      return null;
+    }
+
+    if (statement.loc) {
+      return statement.loc.end.line - 1;
+    }
+
+    const end = getNodeEnd(statement);
+    if (end !== undefined) {
+      return document.positionAt(end).line;
     }
 
     return null;
