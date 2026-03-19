@@ -220,6 +220,25 @@ describe("CodeAnalyzer - getContextNames", () => {
     expect(contextNames).toEqual(["LayerMoreSettings"]);
     expect(contextNames).not.toContain("onClose");
   });
+
+  it("should include context for typed multiline arrow function components", () => {
+    const lines = [
+      "export const StoreOperateDropdown: React.FC<StoreOperateDropdownProps> = ({",
+      "  storeId,",
+      "  platform,",
+      "  isButtonPlugin = false,",
+      "}) => {",
+      "  const isProd = platform === StoreType.etsy;",
+      "  console.log(isProd);",
+      "  return null;",
+      "};",
+    ];
+
+    const document = createMockDocument(lines);
+    const contextNames = codeAnalyzer.getContextNames(document, 5);
+
+    expect(contextNames).toEqual(["StoreOperateDropdown"]);
+  });
 });
 
 function createMockDocument(lines: string[]): vscode.TextDocument {

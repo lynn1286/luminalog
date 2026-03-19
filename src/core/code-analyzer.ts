@@ -55,6 +55,13 @@ export class CodeAnalyzer implements ICodeAnalyzer {
       line
     );
 
+    // Check if line is a typed multi-line arrow function assignment
+    // Pattern: const name: Type = ( or export const name: Type = async (
+    const isTypedMultiLineArrow =
+      /(export\s+)?(const|let|var)\s+[a-zA-Z_$][a-zA-Z0-9_$]*\s*:\s*[^=]+\s*=\s*(async\s+)?\(/.test(
+        line
+      );
+
     // Check if line is a function expression: const name = function() {}
     // Must have 'function' keyword after =
     const isFunctionExpression =
@@ -69,7 +76,8 @@ export class CodeAnalyzer implements ICodeAnalyzer {
       isFunctionExpression ||
       hasFunctionKeyword ||
       isArrowOrMethod ||
-      isMultiLineArrow
+      isMultiLineArrow ||
+      isTypedMultiLineArrow
     );
   }
 
@@ -299,15 +307,27 @@ export class CodeAnalyzer implements ICodeAnalyzer {
     document: vscode.TextDocument,
     startLine: number
   ): { line: number; character: number } | null {
+    let parenCount = 0;
+
     for (let i = startLine; i < document.lineCount; i++) {
       const lineText = document.lineAt(i).text;
-      if (!lineText.includes("{")) {
-        continue;
-      }
 
-      const braceIndex = i === startLine ? lineText.lastIndexOf("{") : lineText.indexOf("{");
-      if (braceIndex !== -1) {
-        return { line: i, character: braceIndex };
+      for (let j = 0; j < lineText.length; j++) {
+        const char = lineText[j];
+
+        if (char === "(") {
+          parenCount++;
+          continue;
+        }
+
+        if (char === ")") {
+          parenCount = Math.max(0, parenCount - 1);
+          continue;
+        }
+
+        if (char === "{" && parenCount === 0) {
+          return { line: i, character: j };
+        }
       }
     }
 
