@@ -188,4 +188,70 @@ describe("display-log-message - class declaration detection", () => {
     // 但我们仍然希望在函数声明行不生成无意义的日志
     expect(result.message).not.toContain("calculateTotal");
   });
+
+  it("should insert before if statement when selecting member expression in condition", () => {
+    const lines = [
+      "Object.keys(pathMap).forEach((key) => {",
+      "  let rowData = pathMap[key];",
+      "  if (key === CUSTOM_LINK_TEMPLATE_KEY.CUSTOM_LINK) {",
+      "    rowData = `<span>${pathMap[key]}</span>`;",
+      "  }",
+      "  result = result.replaceAll(key, rowData);",
+      "});",
+    ];
+
+    const document = {
+      uri: vscode.Uri.file("test.tsx"),
+      lineCount: lines.length,
+      lineAt: ((lineOrPosition: number | vscode.Position): vscode.TextLine => {
+        const line = typeof lineOrPosition === "number" ? lineOrPosition : lineOrPosition.line;
+        const text = lines[line];
+        const trimmed = text.trim();
+        return {
+          text,
+          lineNumber: line,
+          range: new vscode.Range(
+            new vscode.Position(line, 0),
+            new vscode.Position(line, text.length)
+          ),
+          rangeIncludingLineBreak: new vscode.Range(
+            new vscode.Position(line, 0),
+            new vscode.Position(line, text.length + 1)
+          ),
+          firstNonWhitespaceCharacterIndex: text.length - text.trimStart().length,
+          isEmptyOrWhitespace: trimmed.length === 0,
+        };
+      }) as any,
+      getText: (range?: vscode.Range) => {
+        if (!range) return lines.join("\n");
+        if (range.start.line === range.end.line) {
+          const line = lines[range.start.line];
+          return line.substring(range.start.character, range.end.character);
+        }
+        return "";
+      },
+      positionAt: (offset: number): vscode.Position => {
+        let currentOffset = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const lineLength = lines[i].length + 1;
+          if (currentOffset + lineLength > offset) {
+            return new vscode.Position(i, offset - currentOffset);
+          }
+          currentOffset += lineLength;
+        }
+        return new vscode.Position(lines.length - 1, lines[lines.length - 1].length);
+      },
+    } as vscode.TextDocument;
+
+    const result = logMessageService.generateLogMessage({
+      document,
+      selectedVar: "CUSTOM_LINK_TEMPLATE_KEY.CUSTOM_LINK",
+      lineOfSelectedVar: 2,
+      tabSize: 2,
+      originalPropertyName: "CUSTOM_LINK_TEMPLATE_KEY.CUSTOM_LINK",
+    });
+
+    expect(result.insertLine).toBe(2);
+    expect(result.message).toContain("CUSTOM_LINK_TEMPLATE_KEY.CUSTOM_LINK");
+  });
 });

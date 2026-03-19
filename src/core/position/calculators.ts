@@ -450,7 +450,7 @@ class ReturnExpressionCalculator implements PositionCalculator {
 
 /**
  * 条件表达式计算器
- * 在条件语句内部的第一行插入
+ * 在条件语句之前插入，确保无论条件是否成立都能打印日志
  */
 class ConditionalExpressionCalculator implements PositionCalculator {
   calculate(
@@ -502,48 +502,20 @@ class ConditionalExpressionCalculator implements PositionCalculator {
       return false;
     });
 
-    // 三元运算符没有语句体，返回当前行
+    // 三元运算符没有独立语句体，保持在当前表达式所在行之前插入
     if (isTernary) {
       return targetLine;
     }
 
     if (conditionalNode) {
-      // 获取条件语句的语句体
-      const body = this.getStatementBody(conditionalNode);
-      if (body) {
-        // 如果是块语句，在块的第一行插入
-        if (isBlockStatement(body)) {
-          const bodyStart = getNodeStart(body);
-          if (bodyStart !== undefined) {
-            const bodyStartLine = document.positionAt(bodyStart).line;
-            const lineText = document.lineAt(bodyStartLine).text;
-
-            // 检查花括号是否在行尾
-            const braceAtEnd = lineText.trim().endsWith("{");
-            return braceAtEnd ? bodyStartLine + 1 : bodyStartLine;
-          }
-        } else {
-          // 如果不是块语句（单行语句），在语句之前插入
-          const bodyStart = getNodeStart(body);
-          if (bodyStart !== undefined) {
-            return document.positionAt(bodyStart).line;
-          }
-        }
+      const conditionalStart = getNodeStart(conditionalNode);
+      if (conditionalStart !== undefined) {
+        return document.positionAt(conditionalStart).line;
       }
     }
 
     // 默认在当前行之后插入
     return targetLine + 1;
-  }
-
-  private getStatementBody(node: ASTNode): ASTNode | null {
-    if (node.type === "IfStatement") {
-      return node.consequent || null;
-    }
-    if (node.type === "WhileStatement" || node.type === "ForStatement") {
-      return node.body || null;
-    }
-    return null;
   }
 }
 

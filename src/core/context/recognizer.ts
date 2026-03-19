@@ -728,6 +728,16 @@ export class ContextRecognizer {
         const endLine = doc.positionAt(testEnd).line;
 
         if (line >= startLine && line <= endLine) {
+          if (
+            (varName.includes(".") || varName.includes("(") || varName.includes("?")) &&
+            doc
+              .getText(new vscode.Range(doc.positionAt(testStart), doc.positionAt(testEnd)))
+              .includes(varName)
+          ) {
+            found = true;
+            return true;
+          }
+
           if (this.containsVariable(node.test, varName)) {
             found = true;
             return true;
@@ -745,6 +755,16 @@ export class ContextRecognizer {
             const endLine = doc.positionAt(testEnd).line;
 
             if (line >= startLine && line <= endLine) {
+              if (
+                (varName.includes(".") || varName.includes("(") || varName.includes("?")) &&
+                doc
+                  .getText(new vscode.Range(doc.positionAt(testStart), doc.positionAt(testEnd)))
+                  .includes(varName)
+              ) {
+                found = true;
+                return true;
+              }
+
               if (this.containsVariable(node.test, varName)) {
                 found = true;
                 return true;
