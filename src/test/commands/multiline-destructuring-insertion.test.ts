@@ -106,6 +106,61 @@ describe("display-log-message - multiline destructuring insertion", () => {
     expect(dataSourceResult.insertLine).toBe(3);
     expect(dataSourceResult.message).toContain("dataSource");
   });
+
+  it("should keep insertions inside nested callback bodies of multiline function calls", () => {
+    const document = createMockDocument([
+      "const { run, cancel } = useRequest(",
+      "  async () => {",
+      "    const ids = Array.from(curTaskIds.current);",
+      "    return queryBatchProgress({ ids: ids.join(',') });",
+      "  },",
+      "  {",
+      "    onSuccess: (res: any) => {",
+      "      setDataSource((prev) => {",
+      "        const next = [...prev];",
+      "        const updates = {",
+      "          status: res.status,",
+      "        } as any;",
+      "        return next;",
+      "      });",
+      "    },",
+      "    onFinally: () => {",
+      "      if (isPollingRef.current) {",
+      "        cancel();",
+      "      }",
+      "    },",
+      "  },",
+      ");",
+    ]);
+
+    const idsResult = logMessageService.generateLogMessage({
+      document,
+      selectedVar: "ids",
+      lineOfSelectedVar: 2,
+      tabSize: 2,
+      originalPropertyName: "ids",
+    });
+
+    const nextResult = logMessageService.generateLogMessage({
+      document,
+      selectedVar: "next",
+      lineOfSelectedVar: 8,
+      tabSize: 2,
+      originalPropertyName: "next",
+    });
+
+    const updatesResult = logMessageService.generateLogMessage({
+      document,
+      selectedVar: "updates",
+      lineOfSelectedVar: 9,
+      tabSize: 2,
+      originalPropertyName: "updates",
+    });
+
+    expect(idsResult.insertLine).toBe(3);
+    expect(nextResult.insertLine).toBe(9);
+    expect(updatesResult.insertLine).toBe(12);
+  });
 });
 
 function createMockDocument(lines: string[]): vscode.TextDocument {

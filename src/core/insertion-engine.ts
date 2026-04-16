@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import path from "path";
-import { parseCode, getNodeEnd, getNodeStart } from "./ast-utils";
+import { parseCode, getNodeEnd, getNodeStart, walk } from "./ast-utils";
 import { ContextRecognizer } from "./context/recognizer";
 import { PositionCalculatorFactory } from "./position/calculators";
 
@@ -328,12 +328,19 @@ export class InsertionAnalysisEngine {
       const nestedBodies: any[] = [];
 
       for (const declarator of node.declarations ?? []) {
-        const functionBody = this.getFunctionBodyFromDeclarator(declarator);
-        if (functionBody) {
-          nestedBodies.push(...functionBody);
-        }
+        nestedBodies.push(...this.getStatementBodiesFromExpression(declarator?.init));
       }
 
+      return nestedBodies.length > 0 ? nestedBodies : null;
+    }
+
+    if (node.type === "ExpressionStatement") {
+      const nestedBodies = this.getStatementBodiesFromExpression(node.expression);
+      return nestedBodies.length > 0 ? nestedBodies : null;
+    }
+
+    if (node.type === "ReturnStatement") {
+      const nestedBodies = this.getStatementBodiesFromExpression(node.argument);
       return nestedBodies.length > 0 ? nestedBodies : null;
     }
 
@@ -383,17 +390,36 @@ export class InsertionAnalysisEngine {
     return null;
   }
 
-  private getFunctionBodyFromDeclarator(declarator: any): any[] | null {
-    const init = this.unwrapExpression(declarator?.init);
-
-    if (
-      (init?.type === "FunctionExpression" || init?.type === "ArrowFunctionExpression") &&
-      init.body?.type === "BlockStatement"
-    ) {
-      return init.body.body;
+  private getStatementBodiesFromExpression(node: any): any[] {
+    const root = this.unwrapExpression(node);
+    if (!root) {
+      return [];
     }
 
-    return null;
+    const nestedBodies: any[] = [];
+    const pushFunctionBody = (candidate: any): void => {
+      const normalized = this.unwrapExpression(candidate);
+      if (
+        (normalized?.type === "FunctionExpression" ||
+          normalized?.type === "ArrowFunctionExpression") &&
+        normalized.body?.type === "BlockStatement"
+      ) {
+        nestedBodies.push(...normalized.body.body);
+      }
+    };
+
+    pushFunctionBody(root);
+
+    walk(root, (child: any): boolean | void => {
+      if (child === root) {
+        return false;
+      }
+
+      pushFunctionBody(child);
+      return false;
+    });
+
+    return nestedBodies;
   }
 
   private unwrapExpression(node: any): any {

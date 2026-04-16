@@ -1370,6 +1370,40 @@ export class ContextRecognizer {
     return found;
   }
 
+  private isLineInsideNestedFunction(
+    containerNode: ASTNode,
+    doc: vscode.TextDocument,
+    line: number
+  ): boolean {
+    let insideNestedFunction = false;
+
+    walk(containerNode, (child: ASTNode): boolean | void => {
+      if (child === containerNode || !this.isFunctionNode(child)) {
+        return false;
+      }
+
+      const body = child.body;
+      const bodyStart = body ? getNodeStart(body) : undefined;
+      const bodyEnd = body ? getNodeEnd(body) : undefined;
+
+      if (bodyStart === undefined || bodyEnd === undefined) {
+        return false;
+      }
+
+      const startLine = doc.positionAt(bodyStart).line;
+      const endLine = doc.positionAt(bodyEnd).line;
+
+      if (line >= startLine && line <= endLine) {
+        insideNestedFunction = true;
+        return true;
+      }
+
+      return false;
+    });
+
+    return insideNestedFunction;
+  }
+
   private hasCallExpression(node: ASTNode): boolean {
     if (!node) return false;
 
@@ -1431,6 +1465,10 @@ export class ContextRecognizer {
 
         // 检查目标行是否在对象内部
         if (line > startLine && line < endLine) {
+          if (this.isLineInsideNestedFunction(node, doc, line)) {
+            return false;
+          }
+
           // 对于包含点号的变量名（如 OrderBy.updatedAt），只需要检查行是否在对象内部
           // 不需要检查变量是否在对象中，因为它可能是属性值而不是属性名
           if (varName.includes(".")) {
@@ -1488,6 +1526,10 @@ export class ContextRecognizer {
 
         // 检查目标行是否在数组内部
         if (line > startLine && line < endLine) {
+          if (this.isLineInsideNestedFunction(node, doc, line)) {
+            return false;
+          }
+
           // 检查数组内部是否包含目标变量
           if (this.containsVariable(node, varName)) {
             found = true;
@@ -1519,7 +1561,7 @@ export class ContextRecognizer {
     doc: vscode.TextDocument,
     tree: ASTNode,
     line: number,
-    _propertyName: string
+    propertyName: string
   ): string | null {
     let objectVarName: string | null = null;
     let smallestRange = Infinity;
@@ -1537,6 +1579,14 @@ export class ContextRecognizer {
 
         // 检查目标行是否在对象内部
         if (line > startLine && line < endLine) {
+          if (this.isLineInsideNestedFunction(node, doc, line)) {
+            return false;
+          }
+
+          if (!this.containsVariable(node, propertyName)) {
+            return false;
+          }
+
           const rangeSize = endLine - startLine;
           if (rangeSize < smallestRange) {
             smallestRange = rangeSize;
@@ -1564,7 +1614,7 @@ export class ContextRecognizer {
     doc: vscode.TextDocument,
     tree: ASTNode,
     line: number,
-    _elementName: string
+    elementName: string
   ): string | null {
     let arrayVarName: string | null = null;
     let smallestRange = Infinity;
@@ -1581,6 +1631,14 @@ export class ContextRecognizer {
 
         // 检查目标行是否在数组内部
         if (line > startLine && line < endLine) {
+          if (this.isLineInsideNestedFunction(node, doc, line)) {
+            return false;
+          }
+
+          if (!this.containsVariable(node, elementName)) {
+            return false;
+          }
+
           const rangeSize = endLine - startLine;
           if (rangeSize < smallestRange) {
             smallestRange = rangeSize;

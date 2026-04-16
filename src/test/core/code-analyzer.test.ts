@@ -277,6 +277,56 @@ describe("CodeAnalyzer - getContextNames", () => {
 
     expect(contextType).toBe("TypeAnnotation");
   });
+
+  it("should resolve statement start lines inside callback bodies nested in function calls", () => {
+    const lines = [
+      "const { run, cancel } = useRequest(",
+      "  async () => {",
+      "    const ids = Array.from(curTaskIds.current);",
+      "    return queryBatchProgress({ ids: ids.join(',') });",
+      "  },",
+      "  {",
+      "    onSuccess: (res: any) => {",
+      "      setDataSource((prev) => {",
+      "        const next = [...prev];",
+      "        const updates = {",
+      "          status: res.status,",
+      "        } as any;",
+      "        return next;",
+      "      });",
+      "    },",
+      "  },",
+      ");",
+    ];
+
+    const document = createMockDocument(lines);
+
+    expect(codeAnalyzer.getStatementStartLine(document, 2)).toBe(2);
+    expect(codeAnalyzer.getStatementStartLine(document, 8)).toBe(8);
+    expect(codeAnalyzer.getStatementStartLine(document, 9)).toBe(9);
+    expect(codeAnalyzer.getContextType(document, 9, "updates")).not.toBe("InsideObjectLiteral");
+  });
+
+  it("should not infer unrelated object accessors for variables inside callback bodies", () => {
+    const lines = [
+      "const PrintList = () => {",
+      "  const { run } = useRequest(",
+      "    async () => query(),",
+      "    {",
+      "      onSuccess: (res: any) => {",
+      "        const list = res?.list || [];",
+      "        return list;",
+      "      },",
+      "    },",
+      "  );",
+      "};",
+    ];
+
+    const document = createMockDocument(lines);
+
+    expect(codeAnalyzer.getObjectVariableName(document, 5, "list")).toBeNull();
+    expect(codeAnalyzer.getArrayVariableName(document, 5, "list")).toBeNull();
+  });
 });
 
 function createMockDocument(lines: string[]): vscode.TextDocument {
