@@ -469,6 +469,14 @@ export class CodeAnalyzer implements ICodeAnalyzer {
   }
 
   /**
+   * 获取包含当前行的语句起始行
+   * 用于多行声明/表达式的插入位置纠偏
+   */
+  public getStatementStartLine(document: vscode.TextDocument, line: number): number | null {
+    return this.engine.getStatementStartLine(document, line);
+  }
+
+  /**
    * 获取代码上下文类型
    * 用于判断是否需要进行变量扩展
    *

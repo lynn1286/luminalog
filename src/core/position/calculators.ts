@@ -761,17 +761,19 @@ class SimpleAssignmentCalculator implements PositionCalculator {
     walk(tree, (node: ASTNode): boolean | void => {
       if (isVariableDeclaration(node)) {
         for (const declarator of node.declarations) {
-          if (isIdentifier(declarator.id) && declarator.id.name === targetVariable) {
-            const range = getNodeLineRange(node, document);
-            if (range && targetLine >= range.startLine && targetLine <= range.endLine) {
-              // 计算范围大小
-              const rangeSize = range.endLine - range.startLine;
+          if (!this.matchesDeclarator(declarator.id, targetVariable)) {
+            continue;
+          }
 
-              // 只保留最小范围的声明
-              if (rangeSize < smallestRange) {
-                smallestRange = rangeSize;
-                targetDeclaration = node;
-              }
+          const range = getNodeLineRange(node, document);
+          if (range && targetLine >= range.startLine && targetLine <= range.endLine) {
+            // 计算范围大小
+            const rangeSize = range.endLine - range.startLine;
+
+            // 只保留最小范围的声明
+            if (rangeSize < smallestRange) {
+              smallestRange = rangeSize;
+              targetDeclaration = node;
             }
           }
         }
@@ -792,6 +794,42 @@ class SimpleAssignmentCalculator implements PositionCalculator {
     // 直接在目标声明的下一行插入
     const endLine = document.positionAt(targetEnd).line;
     return endLine + 1;
+  }
+
+  private matchesDeclarator(pattern: ASTNode, targetVariable: string): boolean {
+    if (isIdentifier(pattern) && pattern.name === targetVariable) {
+      return true;
+    }
+
+    if (pattern.type === "AssignmentPattern") {
+      return this.matchesDeclarator(pattern.left, targetVariable);
+    }
+
+    if (pattern.type === "RestElement") {
+      return this.matchesDeclarator(pattern.argument, targetVariable);
+    }
+
+    if (isObjectPattern(pattern)) {
+      for (const prop of pattern.properties) {
+        if (prop.type === "Property" && this.matchesDeclarator(prop.value, targetVariable)) {
+          return true;
+        }
+
+        if (prop.type === "RestElement" && this.matchesDeclarator(prop.argument, targetVariable)) {
+          return true;
+        }
+      }
+    }
+
+    if (isArrayPattern(pattern)) {
+      for (const element of pattern.elements) {
+        if (element && this.matchesDeclarator(element, targetVariable)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 }
 

@@ -171,8 +171,11 @@ export class LogMessageService implements ILogMessageService {
       return insertLine;
     }
 
-    const statementEndLine = this.findStatementEndLineBySyntax(document, selectedLine);
-    if (statementEndLine !== null && statementEndLine > selectedLine) {
+    const statementStartLine =
+      this.codeAnalyzer.getStatementStartLine(document, selectedLine) ?? selectedLine;
+    const statementEndLine = this.findStatementEndLineBySyntax(document, statementStartLine);
+
+    if (statementEndLine !== null && statementEndLine + 1 > insertLine) {
       return statementEndLine + 1;
     }
 
