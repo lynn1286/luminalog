@@ -96,6 +96,32 @@ describe("display-log-message - meaningless insertions", () => {
     expect(result.message).toBe("");
   });
 
+  it("should not generate log for function expression declaration name in TSX component", () => {
+    const lines = [
+      "interface Props {",
+      "  list: string[];",
+      "}",
+      "",
+      "const PrintList = (props: Props) => {",
+      "  const { list } = props;",
+      "  return list;",
+      "};",
+    ];
+
+    const document = createMockDocument(lines);
+
+    // 在组件声明行选中函数表达式变量名 PrintList
+    const result = logMessageService.generateLogMessage({
+      document,
+      selectedVar: "PrintList",
+      lineOfSelectedVar: 4,
+      tabSize: 2,
+    });
+
+    // 验证：不应该在组件外生成无意义日志
+    expect(result.message).toBe("");
+  });
+
   it("should not generate log for type annotation", () => {
     const lines = ["function greet(name: string) {", "  console.log('Hello', name);", "}"];
 

@@ -298,14 +298,17 @@ class FunctionCallResultCalculator implements PositionCalculator {
           const declEnd = getNodeEnd(declarator);
           if (declStart === undefined || declEnd === undefined) continue;
 
-          const matchesId =
-            (isIdentifier(declarator.id) && declarator.id.name === targetVariable) ||
-            isObjectPattern(declarator.id) ||
-            isArrayPattern(declarator.id);
+          const matchesId = this.matchesDeclaratorPattern(declarator.id, targetVariable);
 
           if (!matchesId || !declarator.init) continue;
 
-          if (!this.hasCallExpression(declarator.init)) continue;
+          const unwrappedInit = this.unwrapExpression(declarator.init);
+
+          if (isFunctionExpression(unwrappedInit) || isArrowFunctionExpression(unwrappedInit)) {
+            continue;
+          }
+
+          if (!this.hasCallExpression(unwrappedInit)) continue;
 
           const nodeStart = getNodeStart(node);
           const nodeEnd = getNodeEnd(node);
@@ -357,6 +360,64 @@ class FunctionCallResultCalculator implements PositionCalculator {
     });
 
     return found;
+  }
+
+  private matchesDeclaratorPattern(pattern: ASTNode, targetVariable: string): boolean {
+    if (isIdentifier(pattern) && pattern.name === targetVariable) {
+      return true;
+    }
+
+    if (pattern.type === "AssignmentPattern") {
+      return this.matchesDeclaratorPattern(pattern.left, targetVariable);
+    }
+
+    if (pattern.type === "RestElement") {
+      return this.matchesDeclaratorPattern(pattern.argument, targetVariable);
+    }
+
+    if (isObjectPattern(pattern)) {
+      for (const property of pattern.properties) {
+        if (
+          property.type === "Property" &&
+          this.matchesDeclaratorPattern(property.value, targetVariable)
+        ) {
+          return true;
+        }
+
+        if (
+          property.type === "RestElement" &&
+          this.matchesDeclaratorPattern(property.argument, targetVariable)
+        ) {
+          return true;
+        }
+      }
+    }
+
+    if (isArrayPattern(pattern)) {
+      for (const element of pattern.elements) {
+        if (element && this.matchesDeclaratorPattern(element, targetVariable)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  private unwrapExpression(node: ASTNode): ASTNode {
+    let current = node;
+
+    while (
+      current &&
+      (current.type === "TSAsExpression" ||
+        current.type === "TSTypeAssertion" ||
+        current.type === "ParenthesizedExpression" ||
+        current.type === "AwaitExpression")
+    ) {
+      current = current.expression || current.argument;
+    }
+
+    return current;
   }
 }
 

@@ -69,6 +69,7 @@ export class LogMessageService implements ILogMessageService {
     const meaninglessContextTypes = [
       "ClassDeclaration",
       "FunctionDeclaration",
+      "FunctionExpression",
       "TypeAliasDeclaration",
       "InterfaceDeclaration",
       "EnumDeclaration",

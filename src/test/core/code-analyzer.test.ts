@@ -239,6 +239,44 @@ describe("CodeAnalyzer - getContextNames", () => {
 
     expect(contextNames).toEqual(["StoreOperateDropdown"]);
   });
+
+  it("should not treat inner references to function expression names as declaration context", () => {
+    const lines = [
+      "const PrintList = (props: Props) => {",
+      "  const next = PrintList(props);",
+      "  return next;",
+      "};",
+    ];
+
+    const document = createMockDocument(lines);
+    const contextType = codeAnalyzer.getContextType(document, 1, "PrintList");
+
+    expect(contextType).not.toBe("FunctionExpression");
+  });
+
+  it("should resolve statement start lines inside exported arrow function components", () => {
+    const lines = [
+      "export const PrintList = (props: Props) => {",
+      "  const { list } = props;",
+      "  const [dataSource, setDataSource] = useState(disposeTemplateData(list));",
+      "  return dataSource;",
+      "};",
+    ];
+
+    const document = createMockDocument(lines);
+
+    expect(codeAnalyzer.getStatementStartLine(document, 1)).toBe(1);
+    expect(codeAnalyzer.getStatementStartLine(document, 2)).toBe(2);
+  });
+
+  it("should treat parameter type references in arrow function declarations as type annotations", () => {
+    const lines = ["const PrintList = (props: Props) => {", "  return props;", "};"];
+
+    const document = createMockDocument(lines);
+    const contextType = codeAnalyzer.getContextType(document, 0, "Props");
+
+    expect(contextType).toBe("TypeAnnotation");
+  });
 });
 
 function createMockDocument(lines: string[]): vscode.TextDocument {

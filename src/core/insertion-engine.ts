@@ -318,6 +318,26 @@ export class InsertionAnalysisEngine {
    */
   private getNestedBody(node: any): any[] | null {
     if (
+      (node.type === "ExportNamedDeclaration" || node.type === "ExportDefaultDeclaration") &&
+      node.declaration
+    ) {
+      return this.getNestedBody(node.declaration);
+    }
+
+    if (node.type === "VariableDeclaration") {
+      const nestedBodies: any[] = [];
+
+      for (const declarator of node.declarations ?? []) {
+        const functionBody = this.getFunctionBodyFromDeclarator(declarator);
+        if (functionBody) {
+          nestedBodies.push(...functionBody);
+        }
+      }
+
+      return nestedBodies.length > 0 ? nestedBodies : null;
+    }
+
+    if (
       node.type === "FunctionDeclaration" ||
       node.type === "FunctionExpression" ||
       node.type === "ArrowFunctionExpression"
@@ -361,5 +381,33 @@ export class InsertionAnalysisEngine {
     }
 
     return null;
+  }
+
+  private getFunctionBodyFromDeclarator(declarator: any): any[] | null {
+    const init = this.unwrapExpression(declarator?.init);
+
+    if (
+      (init?.type === "FunctionExpression" || init?.type === "ArrowFunctionExpression") &&
+      init.body?.type === "BlockStatement"
+    ) {
+      return init.body.body;
+    }
+
+    return null;
+  }
+
+  private unwrapExpression(node: any): any {
+    let current = node;
+
+    while (
+      current &&
+      (current.type === "TSAsExpression" ||
+        current.type === "TSTypeAssertion" ||
+        current.type === "ParenthesizedExpression")
+    ) {
+      current = current.expression;
+    }
+
+    return current;
   }
 }

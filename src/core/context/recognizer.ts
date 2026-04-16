@@ -608,7 +608,7 @@ export class ContextRecognizer {
         // 或者在函数参数中
         const beforeMatch = lineText.substring(0, lineText.indexOf(match[0]));
         if (
-          /\b(const|let|var|function|=>|\()\s*$/.test(beforeMatch) ||
+          /(\b(const|let|var|function|=>)\s*$|\(\s*$)/.test(beforeMatch) ||
           /^\s*$/.test(beforeMatch) ||
           /,\s*$/.test(beforeMatch)
         ) {
@@ -804,12 +804,17 @@ export class ContextRecognizer {
 
           const { id, init } = declarator;
           if (!init) continue;
+          const unwrapped = this.unwrapExpression(init);
 
-          const matchesId =
-            (isIdentifier(id) && id.name === varName) || isObjectPattern(id) || isArrayPattern(id);
+          const matchesId = this.matchesDeclaratorPattern(id, varName);
 
-          if (matchesId && this.hasCallExpression(init)) {
-            isAsync = isAwaitExpression(init);
+          if (
+            matchesId &&
+            !isFunctionExpression(unwrapped) &&
+            !isArrowFunctionExpression(unwrapped) &&
+            this.hasCallExpression(unwrapped)
+          ) {
+            isAsync = isAwaitExpression(unwrapped);
             found = true;
             return true;
           }
@@ -1113,7 +1118,7 @@ export class ContextRecognizer {
    */
   private recognizeFunctionExpression(
     tree: ASTNode,
-    _doc: vscode.TextDocument,
+    doc: vscode.TextDocument,
     line: number,
     varName: string
   ): CodeContext | null {
@@ -1135,10 +1140,21 @@ export class ContextRecognizer {
           if (!init) continue;
 
           const unwrapped = this.unwrapExpression(init);
+          const isFunctionLike =
+            isFunctionExpression(unwrapped) || isArrowFunctionExpression(unwrapped);
+          if (!isFunctionLike) {
+            continue;
+          }
+
+          const bodyStart = getNodeStart(unwrapped.body);
+          const bodyStartLine =
+            bodyStart !== undefined ? doc.positionAt(bodyStart).line : declStartLine;
+
           if (
             isIdentifier(id) &&
             id.name === varName &&
-            (isFunctionExpression(unwrapped) || isArrowFunctionExpression(unwrapped))
+            line >= declStartLine &&
+            line <= bodyStartLine
           ) {
             found = true;
             return true;
@@ -1148,6 +1164,42 @@ export class ContextRecognizer {
     });
 
     return found ? { type: CodeContextType.FunctionExpression } : null;
+  }
+
+  private matchesDeclaratorPattern(pattern: ASTNode, varName: string): boolean {
+    if (isIdentifier(pattern) && pattern.name === varName) {
+      return true;
+    }
+
+    if (pattern.type === "AssignmentPattern") {
+      return this.matchesDeclaratorPattern(pattern.left, varName);
+    }
+
+    if (pattern.type === "RestElement") {
+      return this.matchesDeclaratorPattern(pattern.argument, varName);
+    }
+
+    if (isObjectPattern(pattern)) {
+      for (const prop of pattern.properties) {
+        if (prop.type === "Property" && this.matchesDeclaratorPattern(prop.value, varName)) {
+          return true;
+        }
+
+        if (prop.type === "RestElement" && this.matchesDeclaratorPattern(prop.argument, varName)) {
+          return true;
+        }
+      }
+    }
+
+    if (isArrayPattern(pattern)) {
+      for (const element of pattern.elements) {
+        if (element && this.matchesDeclaratorPattern(element, varName)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   /**

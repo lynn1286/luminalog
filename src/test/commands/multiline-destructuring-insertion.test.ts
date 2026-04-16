@@ -75,6 +75,37 @@ describe("display-log-message - multiline destructuring insertion", () => {
     expect(result.insertLine).toBe(11);
     expect(result.message).toContain("props");
   });
+
+  it("should keep insertions inside arrow function component bodies", () => {
+    const document = createMockDocument([
+      "const PrintList = (props: Props) => {",
+      "  const { list } = props;",
+      "  const [dataSource, setDataSource] = useState(disposeTemplateData(list));",
+      "  return dataSource;",
+      "};",
+    ]);
+
+    const listResult = logMessageService.generateLogMessage({
+      document,
+      selectedVar: "list",
+      lineOfSelectedVar: 1,
+      tabSize: 2,
+      originalPropertyName: "list",
+    });
+
+    const dataSourceResult = logMessageService.generateLogMessage({
+      document,
+      selectedVar: "dataSource",
+      lineOfSelectedVar: 2,
+      tabSize: 2,
+      originalPropertyName: "dataSource",
+    });
+
+    expect(listResult.insertLine).toBe(2);
+    expect(listResult.message).toContain("list");
+    expect(dataSourceResult.insertLine).toBe(3);
+    expect(dataSourceResult.message).toContain("dataSource");
+  });
 });
 
 function createMockDocument(lines: string[]): vscode.TextDocument {
