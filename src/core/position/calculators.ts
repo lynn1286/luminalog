@@ -14,7 +14,8 @@ export interface PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    targetVariable: string
+    targetVariable: string,
+    targetCharacter?: number
   ): number;
 }
 
@@ -36,6 +37,7 @@ export class PositionCalculatorFactory {
   private registerCalculators(): void {
     this.calculators.set(CodeContextType.ClassDeclaration, new ClassDeclarationCalculator());
     this.calculators.set(CodeContextType.FunctionParam, new FunctionParamCalculator());
+    this.calculators.set(CodeContextType.CatchClauseParam, new CatchClauseParamCalculator());
     this.calculators.set(CodeContextType.FunctionCallResult, new FunctionCallResultCalculator());
     this.calculators.set(
       CodeContextType.ObjectMethodCallResult,
@@ -109,7 +111,8 @@ class FunctionParamCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    targetVariable: string
+    targetVariable: string,
+    _targetCharacter?: number
   ): number {
     const paramNode = this.findParamNode(tree, document, targetLine, targetVariable);
     if (!paramNode) {
@@ -278,6 +281,101 @@ class FunctionParamCalculator implements PositionCalculator {
 }
 
 /**
+ * catch 子句参数计算器
+ * 在 catch 代码块开始处插入
+ */
+class CatchClauseParamCalculator implements PositionCalculator {
+  calculate(
+    tree: ASTNode,
+    document: vscode.TextDocument,
+    targetLine: number,
+    targetVariable: string,
+    _targetCharacter?: number
+  ): number {
+    let catchClause: ASTNode | null = null;
+
+    walk(tree, (node: ASTNode): boolean | void => {
+      if (node.type !== "CatchClause" || !node.param || !node.body) {
+        return false;
+      }
+
+      if (!this.matchesParameter(node.param, targetVariable)) {
+        return false;
+      }
+
+      const paramStart = getNodeStart(node.param);
+      const paramEnd = getNodeEnd(node.param);
+      if (paramStart === undefined || paramEnd === undefined) {
+        return false;
+      }
+
+      const startLine = document.positionAt(paramStart).line;
+      const endLine = document.positionAt(paramEnd).line;
+
+      if (targetLine >= startLine && targetLine <= endLine) {
+        catchClause = node;
+        return true;
+      }
+
+      return false;
+    });
+
+    const catchBody = catchClause ? (catchClause as any).body : null;
+    if (!catchBody) {
+      return targetLine + 1;
+    }
+
+    const bodyStart = getNodeStart(catchBody);
+    if (bodyStart === undefined) {
+      return targetLine + 1;
+    }
+
+    const bracePosition = document.positionAt(bodyStart);
+    const braceLine = bracePosition.line;
+    const braceText = document.lineAt(braceLine).text;
+    const braceAtEnd = braceText.trim().endsWith("{");
+
+    return braceAtEnd ? braceLine + 1 : braceLine;
+  }
+
+  private matchesParameter(param: ASTNode, varName: string): boolean {
+    if (isIdentifier(param) && param.name === varName) {
+      return true;
+    }
+
+    if (param.type === "AssignmentPattern") {
+      return this.matchesParameter(param.left, varName);
+    }
+
+    if (param.type === "RestElement") {
+      return this.matchesParameter(param.argument, varName);
+    }
+
+    if (isObjectPattern(param)) {
+      for (const prop of param.properties) {
+        if (prop.type === "Property" && this.matchesParameter(prop.value, varName)) {
+          return true;
+        }
+
+        if (prop.type === "RestElement" && this.matchesParameter(prop.argument, varName)) {
+          return true;
+        }
+      }
+    }
+
+    if (isArrayPattern(param)) {
+      for (const element of param.elements) {
+        if (element && this.matchesParameter(element, varName)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+}
+
+/**
  * 函数调用结果计算器
  * 在函数调用结束后插入
  */
@@ -286,7 +384,8 @@ class FunctionCallResultCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    targetVariable: string
+    targetVariable: string,
+    _targetCharacter?: number
   ): number {
     let targetEndOffset = -1;
     let smallestRange = Infinity; // 跟踪最小的范围
@@ -435,7 +534,8 @@ class ReturnExpressionCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    targetVariable: string
+    targetVariable: string,
+    targetCharacter?: number
   ): number {
     let returnNode: ASTNode | null = null;
 
@@ -451,6 +551,18 @@ class ReturnExpressionCalculator implements PositionCalculator {
         const endLine = document.positionAt(end).line;
 
         if (targetLine >= startLine && targetLine <= endLine) {
+          if (
+            targetCharacter !== undefined &&
+            this.isPositionInsideNestedFunction(
+              returnStmt.argument,
+              document,
+              targetLine,
+              targetCharacter
+            )
+          ) {
+            return false;
+          }
+
           // 如果 targetVariable 包含点号、括号或问号（属性链或函数调用），
           // 检查 return 语句的文本是否包含这个表达式
           if (
@@ -458,16 +570,14 @@ class ReturnExpressionCalculator implements PositionCalculator {
             targetVariable.includes("(") ||
             targetVariable.includes("?")
           ) {
-            const returnText = document.getText(
-              new vscode.Range(document.positionAt(start), document.positionAt(end))
-            );
-            if (returnText.includes(targetVariable)) {
+            if (
+              this.containsTextOutsideNestedFunctions(returnStmt.argument, document, targetVariable)
+            ) {
               returnNode = returnStmt;
               return true;
             }
           } else {
-            // 简单变量名，使用原来的逻辑
-            if (this.containsVariable(returnStmt.argument, targetVariable)) {
+            if (this.containsVariableOutsideNestedFunctions(returnStmt.argument, targetVariable)) {
               returnNode = returnStmt;
               return true;
             }
@@ -489,7 +599,7 @@ class ReturnExpressionCalculator implements PositionCalculator {
     return targetLine + 1;
   }
 
-  private containsVariable(node: ASTNode, varName: string): boolean {
+  private containsVariableOutsideNestedFunctions(node: ASTNode, varName: string): boolean {
     if (!node) return false;
 
     if (isIdentifier(node) && node.name === varName) {
@@ -498,6 +608,10 @@ class ReturnExpressionCalculator implements PositionCalculator {
 
     let found = false;
     walk(node, (child: ASTNode) => {
+      if (child !== node && this.isFunctionNode(child)) {
+        return true;
+      }
+
       if (isIdentifier(child) && child.name === varName) {
         found = true;
         return true;
@@ -506,6 +620,117 @@ class ReturnExpressionCalculator implements PositionCalculator {
     });
 
     return found;
+  }
+
+  private containsTextOutsideNestedFunctions(
+    node: ASTNode,
+    document: vscode.TextDocument,
+    text: string
+  ): boolean {
+    const start = getNodeStart(node);
+    const end = getNodeEnd(node);
+    if (start === undefined || end === undefined) {
+      return false;
+    }
+
+    const source = document.getText(
+      new vscode.Range(document.positionAt(start), document.positionAt(end))
+    );
+    if (!source.includes(text)) {
+      return false;
+    }
+
+    const chars = source.split("");
+
+    walk(node, (child: ASTNode): boolean | void => {
+      if (child === node || !this.isFunctionNode(child)) {
+        return false;
+      }
+
+      const childStart = getNodeStart(child);
+      const childEnd = getNodeEnd(child);
+      if (childStart === undefined || childEnd === undefined) {
+        return true;
+      }
+
+      const relativeStart = Math.max(0, childStart - start);
+      const relativeEnd = Math.min(chars.length, childEnd - start);
+      for (let i = relativeStart; i < relativeEnd; i++) {
+        chars[i] = " ";
+      }
+
+      return true;
+    });
+
+    return chars.join("").includes(text);
+  }
+
+  private isPositionInsideNestedFunction(
+    containerNode: ASTNode,
+    document: vscode.TextDocument,
+    targetLine: number,
+    targetCharacter: number
+  ): boolean {
+    let insideNestedFunction = false;
+
+    walk(containerNode, (child: ASTNode): boolean | void => {
+      if (child === containerNode || !this.isFunctionNode(child)) {
+        return false;
+      }
+
+      const start = getNodeStart(child);
+      const end = getNodeEnd(child);
+      if (start === undefined || end === undefined) {
+        return true;
+      }
+
+      if (
+        this.isPositionWithinRange(
+          document.positionAt(start),
+          document.positionAt(end),
+          targetLine,
+          targetCharacter
+        )
+      ) {
+        insideNestedFunction = true;
+        return true;
+      }
+
+      return true;
+    });
+
+    return insideNestedFunction;
+  }
+
+  private isPositionWithinRange(
+    start: vscode.Position,
+    end: vscode.Position,
+    targetLine: number,
+    targetCharacter: number
+  ): boolean {
+    if (targetLine < start.line || targetLine > end.line) {
+      return false;
+    }
+
+    if (targetLine === start.line && targetCharacter < start.character) {
+      return false;
+    }
+
+    if (targetLine === end.line && targetCharacter > end.character) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private isFunctionNode(node: ASTNode): boolean {
+    return (
+      isFunctionDeclaration(node) ||
+      isFunctionExpression(node) ||
+      isArrowFunctionExpression(node) ||
+      isMethodDefinition(node) ||
+      node.type === "ClassMethod"
+    );
   }
 }
 
@@ -518,7 +743,8 @@ class ConditionalExpressionCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    _targetVariable: string
+    _targetVariable: string,
+    _targetCharacter?: number
   ): number {
     // 查找包含目标行的条件语句节点
     let conditionalNode: ASTNode | null = null;
@@ -588,7 +814,8 @@ class ObjectLiteralCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    _targetVariable: string
+    _targetVariable: string,
+    _targetCharacter?: number
   ): number {
     return this.findDeclarationEnd(tree, document, targetLine);
   }
@@ -675,7 +902,8 @@ class TemplateLiteralCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    targetVariable: string
+    targetVariable: string,
+    _targetCharacter?: number
   ): number {
     let targetEndOffset = -1;
     let smallestRange = Infinity; // 跟踪最小的范围
@@ -732,7 +960,8 @@ class FunctionExpressionCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    targetVariable: string
+    targetVariable: string,
+    _targetCharacter?: number
   ): number {
     let functionNode: ASTNode | null = null;
     let smallestRange = Infinity; // 跟踪最小的范围
@@ -915,7 +1144,8 @@ class InsideObjectLiteralCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    _targetVariable: string
+    _targetVariable: string,
+    _targetCharacter?: number
   ): number {
     let objectNode: ASTNode | null = null;
     let smallestRange = Infinity;
@@ -1099,7 +1329,8 @@ class InsideArrayLiteralCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    _targetVariable: string
+    _targetVariable: string,
+    _targetCharacter?: number
   ): number {
     let arrayNode: ASTNode | null = null;
     let smallestRange = Infinity;
@@ -1215,7 +1446,8 @@ class ClassDeclarationCalculator implements PositionCalculator {
     tree: ASTNode,
     document: vscode.TextDocument,
     targetLine: number,
-    _targetVariable: string
+    _targetVariable: string,
+    _targetCharacter?: number
   ): number {
     let classNode: ASTNode | null = null;
 

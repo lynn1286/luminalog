@@ -389,11 +389,13 @@ export function createDisplayLogMessageCommand(
         }
 
         const lineOfSelectedVar = effectiveSelection.active.line;
+        const characterOfSelectedVar = effectiveSelection.start.character;
 
         const result = logMessageService.generateLogMessage({
           document,
           selectedVar,
           lineOfSelectedVar,
+          characterOfSelectedVar,
           tabSize,
           originalPropertyName, // 传递原始属性名用于位置计算
         });

@@ -161,6 +161,35 @@ describe("display-log-message - multiline destructuring insertion", () => {
     expect(nextResult.insertLine).toBe(9);
     expect(updatesResult.insertLine).toBe(12);
   });
+
+  it("should not drift to after try-catch return when variable is declared inside try block", () => {
+    const document = createMockDocument([
+      "useMount(async () => {",
+      "  if (templateId) {",
+      "    try {",
+      "      const templateDetail = await getPreviewTemplateDesignDetail(templateId);",
+      "      const { id } = templateDetail;",
+      "      setPageData(id);",
+      "    } catch (err) {",
+      "      console.log(err);",
+      "    }",
+      "    return;",
+      "    console.log(templateDetail);",
+      "  }",
+      "});",
+    ]);
+
+    const result = logMessageService.generateLogMessage({
+      document,
+      selectedVar: "templateDetail",
+      lineOfSelectedVar: 3,
+      tabSize: 2,
+      originalPropertyName: "templateDetail",
+    });
+
+    expect(result.insertLine).toBe(4);
+    expect(result.message).toContain("templateDetail");
+  });
 });
 
 function createMockDocument(lines: string[]): vscode.TextDocument {

@@ -28,7 +28,8 @@ export class InsertionAnalysisEngine {
   public analyze(
     document: vscode.TextDocument,
     targetLine: number,
-    targetVariable: string
+    targetVariable: string,
+    targetCharacter?: number
   ): number | null {
     // 1. 解析代码为 AST
     const sourceCode = document.getText();
@@ -41,7 +42,12 @@ export class InsertionAnalysisEngine {
     }
 
     // 2. 识别代码上下文
-    const context = this.contextRecognizer.recognize(document, targetLine, targetVariable);
+    const context = this.contextRecognizer.recognize(
+      document,
+      targetLine,
+      targetVariable,
+      targetCharacter
+    );
     if (!context) {
       const syntaxEndLine = this.findStatementEndLineBySyntax(document, targetLine);
       if (syntaxEndLine !== null && syntaxEndLine > targetLine) {
@@ -60,7 +66,13 @@ export class InsertionAnalysisEngine {
     const calculator = this.calculatorFactory.getCalculator(context.type);
 
     // 4. 计算插入位置
-    const insertLine = calculator.calculate(syntaxTree, document, targetLine, targetVariable);
+    const insertLine = calculator.calculate(
+      syntaxTree,
+      document,
+      targetLine,
+      targetVariable,
+      targetCharacter
+    );
 
     return insertLine;
   }
@@ -77,9 +89,15 @@ export class InsertionAnalysisEngine {
   public getContextType(
     document: vscode.TextDocument,
     targetLine: number,
-    targetVariable: string
+    targetVariable: string,
+    targetCharacter?: number
   ): string | null {
-    const context = this.contextRecognizer.recognize(document, targetLine, targetVariable);
+    const context = this.contextRecognizer.recognize(
+      document,
+      targetLine,
+      targetVariable,
+      targetCharacter
+    );
     return context ? context.type : null;
   }
 
@@ -374,6 +392,24 @@ export class InsertionAnalysisEngine {
           bodies.push(node.alternate);
         }
       }
+      return bodies.length > 0 ? bodies : null;
+    }
+
+    if (node.type === "TryStatement") {
+      const bodies: any[] = [];
+
+      if (node.block?.type === "BlockStatement") {
+        bodies.push(...node.block.body);
+      }
+
+      if (node.handler?.body?.type === "BlockStatement") {
+        bodies.push(...node.handler.body.body);
+      }
+
+      if (node.finalizer?.type === "BlockStatement") {
+        bodies.push(...node.finalizer.body);
+      }
+
       return bodies.length > 0 ? bodies : null;
     }
 

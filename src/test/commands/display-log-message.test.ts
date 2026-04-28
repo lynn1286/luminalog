@@ -254,4 +254,181 @@ describe("display-log-message - class declaration detection", () => {
     expect(result.insertLine).toBe(2);
     expect(result.message).toContain("CUSTOM_LINK_TEMPLATE_KEY.CUSTOM_LINK");
   });
+
+  it("should keep log insertion inside JSX callback bodies instead of jumping before outer return", () => {
+    const lines = [
+      "const Component = () => {",
+      "  const foo = 1;",
+      "  return (",
+      "    <button",
+      "      onClick={() => {",
+      "        const clickedValue = foo;",
+      "      }}",
+      "    >",
+      "      {foo}",
+      "    </button>",
+      "  );",
+      "};",
+    ];
+
+    const document = createMockDocument(lines, "test.tsx");
+    const selectedLine = 5;
+    const selectedVar = "foo";
+    const selectedCharacter = lines[selectedLine].indexOf(selectedVar);
+
+    const contextType = logMessageService.getContextType(
+      document,
+      selectedLine,
+      selectedVar,
+      selectedCharacter
+    );
+
+    const result = logMessageService.generateLogMessage({
+      document,
+      selectedVar,
+      lineOfSelectedVar: selectedLine,
+      characterOfSelectedVar: selectedCharacter,
+      tabSize: 2,
+      originalPropertyName: selectedVar,
+    });
+
+    expect(contextType).not.toBe("ReturnExpression");
+    expect(result.insertLine).toBe(6);
+    expect(result.message).toContain("foo");
+  });
+
+  it("should still insert before outer return for JSX expressions outside callbacks", () => {
+    const lines = [
+      "const Component = () => {",
+      "  const foo = 1;",
+      "  return (",
+      "    <button",
+      "      onClick={() => {",
+      "        const clickedValue = foo;",
+      "      }}",
+      "    >",
+      "      {foo}",
+      "    </button>",
+      "  );",
+      "};",
+    ];
+
+    const document = createMockDocument(lines, "test.tsx");
+    const selectedLine = 8;
+    const selectedVar = "foo";
+    const selectedCharacter = lines[selectedLine].indexOf(selectedVar);
+
+    const contextType = logMessageService.getContextType(
+      document,
+      selectedLine,
+      selectedVar,
+      selectedCharacter
+    );
+
+    const result = logMessageService.generateLogMessage({
+      document,
+      selectedVar,
+      lineOfSelectedVar: selectedLine,
+      characterOfSelectedVar: selectedCharacter,
+      tabSize: 2,
+      originalPropertyName: selectedVar,
+    });
+
+    expect(contextType).toBe("ReturnExpression");
+    expect(result.insertLine).toBe(2);
+    expect(result.message).toContain("foo");
+  });
+
+  it("should insert inside catch block when selecting catch parameter", () => {
+    const lines = [
+      "const load = async () => {",
+      "  try {",
+      "    await request();",
+      "  } catch (err) {",
+      "    console.log(err);",
+      "    report(err);",
+      "  }",
+      "  return;",
+      "  console.log(err);",
+      "};",
+    ];
+
+    const document = createMockDocument(lines, "test.tsx");
+    const selectedLine = 3;
+    const selectedVar = "err";
+    const selectedCharacter = lines[selectedLine].indexOf(selectedVar);
+
+    const contextType = logMessageService.getContextType(
+      document,
+      selectedLine,
+      selectedVar,
+      selectedCharacter
+    );
+
+    const result = logMessageService.generateLogMessage({
+      document,
+      selectedVar,
+      lineOfSelectedVar: selectedLine,
+      characterOfSelectedVar: selectedCharacter,
+      tabSize: 2,
+      originalPropertyName: selectedVar,
+    });
+
+    expect(contextType).toBe("CatchClauseParam");
+    expect(result.insertLine).toBe(4);
+    expect(result.message).toContain("err");
+  });
 });
+
+function createMockDocument(lines: string[], fileName: string): vscode.TextDocument {
+  return {
+    uri: vscode.Uri.file(fileName),
+    lineCount: lines.length,
+    lineAt: ((lineOrPosition: number | vscode.Position): vscode.TextLine => {
+      const line = typeof lineOrPosition === "number" ? lineOrPosition : lineOrPosition.line;
+      const text = lines[line];
+      const trimmed = text.trim();
+      return {
+        text,
+        lineNumber: line,
+        range: new vscode.Range(
+          new vscode.Position(line, 0),
+          new vscode.Position(line, text.length)
+        ),
+        rangeIncludingLineBreak: new vscode.Range(
+          new vscode.Position(line, 0),
+          new vscode.Position(line, text.length + 1)
+        ),
+        firstNonWhitespaceCharacterIndex: text.length - text.trimStart().length,
+        isEmptyOrWhitespace: trimmed.length === 0,
+      };
+    }) as any,
+    getText: (range?: vscode.Range) => {
+      if (!range) return lines.join("\n");
+
+      if (range.start.line === range.end.line) {
+        const line = lines[range.start.line];
+        return line.substring(range.start.character, range.end.character);
+      }
+
+      const selectedLines = lines.slice(range.start.line, range.end.line + 1);
+      selectedLines[0] = selectedLines[0].substring(range.start.character);
+      selectedLines[selectedLines.length - 1] = selectedLines[selectedLines.length - 1].substring(
+        0,
+        range.end.character
+      );
+      return selectedLines.join("\n");
+    },
+    positionAt: (offset: number): vscode.Position => {
+      let currentOffset = 0;
+      for (let i = 0; i < lines.length; i++) {
+        const lineLength = lines[i].length + 1;
+        if (currentOffset + lineLength > offset) {
+          return new vscode.Position(i, offset - currentOffset);
+        }
+        currentOffset += lineLength;
+      }
+      return new vscode.Position(lines.length - 1, lines[lines.length - 1].length);
+    },
+  } as vscode.TextDocument;
+}

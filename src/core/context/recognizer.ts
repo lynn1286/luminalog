@@ -39,7 +39,8 @@ export class ContextRecognizer {
   public recognize(
     document: vscode.TextDocument,
     targetLine: number,
-    targetVariable: string
+    targetVariable: string,
+    targetCharacter?: number
   ): CodeContext | null {
     const sourceCode = document.getText();
     const filePath = document.uri.fsPath;
@@ -64,8 +65,10 @@ export class ContextRecognizer {
       this.recognizeTypeAnnotation.bind(this),
       this.recognizeClassDeclaration.bind(this),
       this.recognizeFunctionParam.bind(this), // 函数参数优先于函数声明
+      this.recognizeCatchClauseParam.bind(this),
       this.recognizeFunctionDeclaration.bind(this),
-      this.recognizeReturnExpression.bind(this),
+      (tree: ASTNode, doc: vscode.TextDocument, line: number, varName: string) =>
+        this.recognizeReturnExpression(tree, doc, line, varName, targetCharacter),
       this.recognizeConditionalExpression.bind(this),
       this.recognizeTernaryOperation.bind(this),
       this.recognizeObjectMethodCallResult.bind(this),
@@ -655,13 +658,47 @@ export class ContextRecognizer {
   }
 
   /**
+   * 识别 catch 子句参数
+   */
+  private recognizeCatchClauseParam(
+    tree: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    varName: string
+  ): CodeContext | null {
+    let found = false;
+
+    walk(tree, (node: ASTNode): boolean | void => {
+      if (found) return true;
+
+      if (node.type !== "CatchClause" || !node.param) {
+        return false;
+      }
+
+      if (!this.matchesParameter(node.param, varName)) {
+        return false;
+      }
+
+      if (this.isParameterMatchOnLine(node.param, doc, line, varName)) {
+        found = true;
+        return true;
+      }
+
+      return false;
+    });
+
+    return found ? { type: CodeContextType.CatchClauseParam } : null;
+  }
+
+  /**
    * 识别 return 语句中的表达式
    */
   private recognizeReturnExpression(
     tree: ASTNode,
     doc: vscode.TextDocument,
     line: number,
-    varName: string
+    varName: string,
+    targetCharacter?: number
   ): CodeContext | null {
     let found = false;
 
@@ -677,19 +714,22 @@ export class ContextRecognizer {
         const endLine = doc.positionAt(nodeEnd).line;
 
         if (line >= startLine && line <= endLine) {
+          if (
+            targetCharacter !== undefined &&
+            this.isPositionInsideNestedFunction(node.argument, doc, line, targetCharacter)
+          ) {
+            return false;
+          }
+
           // 如果 varName 包含点号、括号或问号（属性链或函数调用），
           // 检查 return 语句的文本是否包含这个表达式
           if (varName.includes(".") || varName.includes("(") || varName.includes("?")) {
-            const returnText = doc.getText(
-              new vscode.Range(doc.positionAt(nodeStart), doc.positionAt(nodeEnd))
-            );
-            if (returnText.includes(varName)) {
+            if (this.containsTextOutsideNestedFunctions(node.argument, doc, varName)) {
               found = true;
               return true;
             }
           } else {
-            // 简单变量名，使用原来的逻辑
-            if (this.containsVariable(node.argument, varName)) {
+            if (this.containsVariableOutsideNestedFunctions(node.argument, varName)) {
               found = true;
               return true;
             }
@@ -1368,6 +1408,129 @@ export class ContextRecognizer {
     });
 
     return found;
+  }
+
+  private containsVariableOutsideNestedFunctions(node: ASTNode, varName: string): boolean {
+    if (!node) return false;
+
+    if (isIdentifier(node) && node.name === varName) {
+      return true;
+    }
+
+    let found = false;
+    walk(node, (child: ASTNode): boolean | void => {
+      if (child !== node && this.isFunctionNode(child)) {
+        return true;
+      }
+
+      if (isIdentifier(child) && child.name === varName) {
+        found = true;
+        return true;
+      }
+
+      return false;
+    });
+
+    return found;
+  }
+
+  private containsTextOutsideNestedFunctions(
+    node: ASTNode,
+    doc: vscode.TextDocument,
+    text: string
+  ): boolean {
+    const start = getNodeStart(node);
+    const end = getNodeEnd(node);
+    if (start === undefined || end === undefined) {
+      return false;
+    }
+
+    const source = doc.getText(new vscode.Range(doc.positionAt(start), doc.positionAt(end)));
+    if (!source.includes(text)) {
+      return false;
+    }
+
+    const chars = source.split("");
+
+    walk(node, (child: ASTNode): boolean | void => {
+      if (child === node || !this.isFunctionNode(child)) {
+        return false;
+      }
+
+      const childStart = getNodeStart(child);
+      const childEnd = getNodeEnd(child);
+      if (childStart === undefined || childEnd === undefined) {
+        return true;
+      }
+
+      const relativeStart = Math.max(0, childStart - start);
+      const relativeEnd = Math.min(chars.length, childEnd - start);
+      for (let i = relativeStart; i < relativeEnd; i++) {
+        chars[i] = " ";
+      }
+
+      return true;
+    });
+
+    return chars.join("").includes(text);
+  }
+
+  private isPositionInsideNestedFunction(
+    containerNode: ASTNode,
+    doc: vscode.TextDocument,
+    line: number,
+    targetCharacter: number
+  ): boolean {
+    let insideNestedFunction = false;
+
+    walk(containerNode, (child: ASTNode): boolean | void => {
+      if (child === containerNode || !this.isFunctionNode(child)) {
+        return false;
+      }
+
+      const start = getNodeStart(child);
+      const end = getNodeEnd(child);
+      if (start === undefined || end === undefined) {
+        return true;
+      }
+
+      if (
+        this.isPositionWithinRange(
+          doc.positionAt(start),
+          doc.positionAt(end),
+          line,
+          targetCharacter
+        )
+      ) {
+        insideNestedFunction = true;
+        return true;
+      }
+
+      return true;
+    });
+
+    return insideNestedFunction;
+  }
+
+  private isPositionWithinRange(
+    start: vscode.Position,
+    end: vscode.Position,
+    line: number,
+    targetCharacter: number
+  ): boolean {
+    if (line < start.line || line > end.line) {
+      return false;
+    }
+
+    if (line === start.line && targetCharacter < start.character) {
+      return false;
+    }
+
+    if (line === end.line && targetCharacter > end.character) {
+      return false;
+    }
+
+    return true;
   }
 
   private isLineInsideNestedFunction(

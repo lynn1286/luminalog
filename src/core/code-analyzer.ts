@@ -421,9 +421,10 @@ export class CodeAnalyzer implements ICodeAnalyzer {
   public calculateInsertLine(
     document: vscode.TextDocument,
     selectionLine: number,
-    selectedVar: string
+    selectedVar: string,
+    targetCharacter?: number
   ): number {
-    const insertLine = this.engine.analyze(document, selectionLine, selectedVar);
+    const insertLine = this.engine.analyze(document, selectionLine, selectedVar, targetCharacter);
 
     if (insertLine !== null) {
       return insertLine;
@@ -488,9 +489,10 @@ export class CodeAnalyzer implements ICodeAnalyzer {
   public getContextType(
     document: vscode.TextDocument,
     line: number,
-    varName: string
+    varName: string,
+    targetCharacter?: number
   ): string | null {
-    return this.engine.getContextType(document, line, varName);
+    return this.engine.getContextType(document, line, varName, targetCharacter);
   }
 
   /**

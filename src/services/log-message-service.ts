@@ -32,7 +32,13 @@ export class LogMessageService implements ILogMessageService {
 
   public generateLogMessage(params: LogMessageParams): LogMessageResult {
     const config = this.configService.getConfig();
-    const { document, selectedVar, lineOfSelectedVar, originalPropertyName } = params;
+    const {
+      document,
+      selectedVar,
+      lineOfSelectedVar,
+      characterOfSelectedVar,
+      originalPropertyName,
+    } = params;
 
     // 使用原始属性名进行位置计算（如果提供），否则使用 selectedVar
     const varForPositionCalc = originalPropertyName || selectedVar;
@@ -40,17 +46,19 @@ export class LogMessageService implements ILogMessageService {
     let insertLine = this.codeAnalyzer.calculateInsertLine(
       document,
       lineOfSelectedVar,
-      varForPositionCalc
+      varForPositionCalc,
+      characterOfSelectedVar
     );
 
     // 获取上下文类型，判断是否是类声明、函数声明或类型声明
     const contextType = this.codeAnalyzer.getContextType(
       document,
       lineOfSelectedVar,
-      varForPositionCalc
+      varForPositionCalc,
+      characterOfSelectedVar
     );
 
-    if (contextType !== "FunctionParam") {
+    if (contextType !== "FunctionParam" && contextType !== "CatchClauseParam") {
       insertLine = this.adjustInsertLineForMultilineStatement(
         document,
         lineOfSelectedVar,
@@ -406,9 +414,10 @@ export class LogMessageService implements ILogMessageService {
   public getContextType(
     document: vscode.TextDocument,
     line: number,
-    varName: string
+    varName: string,
+    targetCharacter?: number
   ): string | null {
-    return this.codeAnalyzer.getContextType(document, line, varName);
+    return this.codeAnalyzer.getContextType(document, line, varName, targetCharacter);
   }
 
   /**

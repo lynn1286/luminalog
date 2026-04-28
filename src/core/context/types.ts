@@ -6,6 +6,9 @@ export enum CodeContextType {
   /** 函数参数定义 */
   FunctionParam = "FunctionParam",
 
+  /** catch 子句参数定义 */
+  CatchClauseParam = "CatchClauseParam",
+
   /** 函数调用返回值 */
   FunctionCallResult = "FunctionCallResult",
 

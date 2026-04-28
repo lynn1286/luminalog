@@ -59,6 +59,7 @@ export interface LogMessageParams {
   document: vscode.TextDocument;
   selectedVar: string;
   lineOfSelectedVar: number;
+  characterOfSelectedVar?: number;
   tabSize: number;
   originalPropertyName?: string; // 原始属性名，用于位置计算（当 selectedVar 被扩展时）
 }
@@ -79,7 +80,12 @@ export interface ILogMessageService {
   detectAllLogMessages(document: vscode.TextDocument, tabSize: number): LogMessage[];
   isValidBlankLocation(document: vscode.TextDocument, line: number): boolean;
   generateContextOnlyLogMessage(params: ContextOnlyLogParams): LogMessageResult;
-  getContextType(document: vscode.TextDocument, line: number, varName: string): string | null;
+  getContextType(
+    document: vscode.TextDocument,
+    line: number,
+    varName: string,
+    targetCharacter?: number
+  ): string | null;
   getObjectVariableName(
     document: vscode.TextDocument,
     line: number,
@@ -104,7 +110,8 @@ export interface ICodeAnalyzer {
   calculateInsertLine(
     document: vscode.TextDocument,
     selectionLine: number,
-    selectedVar: string
+    selectedVar: string,
+    targetCharacter?: number
   ): number;
   calculateIndentation(document: vscode.TextDocument, line: number, tabSize: number): string;
 }
